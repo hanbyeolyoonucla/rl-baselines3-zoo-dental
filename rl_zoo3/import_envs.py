@@ -46,6 +46,9 @@ except ImportError:
     pass
 
 
+import dental_env
+
+
 # Register no vel envs
 def create_no_vel_env(env_id: str) -> Callable[[Optional[str]], gym.Env]:
     def make_env(render_mode: Optional[str] = None) -> gym.Env:

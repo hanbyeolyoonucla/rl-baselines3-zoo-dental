@@ -113,8 +113,8 @@ class DentalEnv2D(gym.Env):
             canvas,
             (0, 0, 255, 50),
             pygame.Rect(
-                (0, pix_square_size * self._agent_location[1]),
-                (pix_square_size * (self._agent_location[0] + 1), pix_square_size),
+                (pix_square_size * self._agent_location[1], 0),
+                (pix_square_size, pix_square_size * (self._agent_location[0] + 1)),
             )
         )
 
@@ -125,7 +125,7 @@ class DentalEnv2D(gym.Env):
                     canvas,
                     (255, 0, 0),
                     pygame.Rect(
-                        pix_square_size * np.array(index),
+                        pix_square_size * np.flip(index),
                         (pix_square_size, pix_square_size),
                     ),
                 )
@@ -134,7 +134,7 @@ class DentalEnv2D(gym.Env):
                     canvas,
                     (0, 255, 0),
                     pygame.Rect(
-                        pix_square_size * np.array(index),
+                        pix_square_size * np.flip(index),
                         (pix_square_size, pix_square_size),
                     ),
                 )

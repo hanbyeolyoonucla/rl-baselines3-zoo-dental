@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import open3d as o3d
 import trimesh
+import logging
+logger = logging.getLogger("trimesh")
+logger.setLevel(logging.ERROR)
 
 class DentalEnv3D(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
@@ -189,7 +192,7 @@ class DentalEnv3DSTL(gym.Env):
                                     dtype=int)  # start from top center
         # self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
         # self._states[:, :, -1] = 0  # empty space
-        self._states = np.zeros((self.size, self.size, self.size))
+        self._states = np.zeros((self.size, self.size, self.size), dtype=int)
         self._states[:, self.size//6+1:self.size*5//6, :self.size*2//3] = 3  # adjacent
         self._states[self.size//6+1:self.size*5//6, self.size//6+1:self.size*5//6, :self.size*2//3] = 2  # enamel
         decay_idx = self.np_random.integers([self.size//6+1, self.size//6+1, 0], [self.size*5//6, self.size*5//6, self.size*2//3], size=(self.size*self.size*2//9, 3))

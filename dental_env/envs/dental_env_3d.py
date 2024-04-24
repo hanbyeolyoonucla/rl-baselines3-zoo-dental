@@ -113,12 +113,12 @@ class DentalEnv3D(gym.Env):
             self.window.set_ylabel('y')
             self.window.set_zlabel('z')
 
-        alpha = 0.8
+        alpha = 0.7
         self.window.clear()
         burr = np.zeros_like(self._states, dtype=bool)
         burr[self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = True
         self.window.voxels(burr, facecolors=[0, 0, 1], edgecolors='grey')
-        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, alpha], edgecolors='grey')
+        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, 1], edgecolors='grey')
         self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha], edgecolors='grey')
         self.window.voxels(self._states == self._state_label['adjacent'], facecolors=[1, 0.7, 0, alpha], edgecolors='grey')
 
@@ -148,13 +148,14 @@ class DentalEnv3DSTL(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "agent": spaces.Box(0, self.size - 1, shape=(3,), dtype=int),
-                "states": spaces.MultiDiscrete(3 * np.ones((self.size, self.size, self.size))),
+                "states": spaces.MultiDiscrete(4 * np.ones((self.size, self.size, self.size))),
             }
         )
         self._state_label = {
             "empty": 0,
             "decay": 1,
             "enamel": 2,
+            "adjacent": 3,
         }
 
         self.action_space = spaces.Discrete(26)
@@ -186,8 +187,13 @@ class DentalEnv3DSTL(gym.Env):
 
         self._agent_location = np.array([np.ceil(self.size / 2) - 1, np.ceil(self.size / 2) - 1, self.size - 1],
                                     dtype=int)  # start from top center
-        self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
-        self._states[:, :, -1] = 0  # empty space
+        # self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
+        # self._states[:, :, -1] = 0  # empty space
+        self._states = np.zeros((self.size, self.size, self.size))
+        self._states[:, self.size//6+1:self.size*5//6, :self.size*2//3] = 3  # adjacent
+        self._states[self.size//6+1:self.size*5//6, self.size//6+1:self.size*5//6, :self.size*2//3] = 2  # enamel
+        decay_idx = self.np_random.integers([self.size//6+1, self.size//6+1, 0], [self.size*5//6, self.size*5//6, self.size*2//3], size=(self.size*self.size*2//9, 3))
+        self._states[decay_idx[:,0], decay_idx[:,1], decay_idx[:,2]] = 1  # decay
 
         observation = self._get_obs()
         info = self._get_info()
@@ -218,9 +224,10 @@ class DentalEnv3DSTL(gym.Env):
             burr_occupancy.matrix[occupancy_idx[:,0],occupancy_idx[:,1],occupancy_idx[:,2]] = True
 
         # reward
-        reward_decay_removal = np.sum(burr_occupancy.matrix & self._states == self._state_label['decay'])
-        reward_enamel_removal = np.sum(burr_occupancy.matrix & self._states == self._state_label['enamel'])
-        reward = 10 * reward_decay_removal - reward_enamel_removal
+        reward_decay_removal = np.sum(burr_occupancy.matrix & (self._states == self._state_label['decay']))
+        reward_enamel_removal = np.sum(burr_occupancy.matrix & (self._states == self._state_label['enamel']))
+        reward_adjacent_removal = np.sum(burr_occupancy.matrix & (self._states == self._state_label['adjacent']))
+        reward = 10 * reward_decay_removal - reward_enamel_removal - 10 * reward_adjacent_removal
 
         # state
         self._states[burr_occupancy.matrix] = 0
@@ -250,7 +257,7 @@ class DentalEnv3DSTL(gym.Env):
             self.window.set_ylabel('y')
             self.window.set_zlabel('z')
 
-        alpha = 0.8
+        alpha = 0.7
         self.window.clear()
 
         self.burr = self.burr_init.copy()
@@ -258,8 +265,9 @@ class DentalEnv3DSTL(gym.Env):
         vertices = self.burr.vertices
         faces = self.burr.faces
         self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], triangles=faces, color='gray')
-        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, alpha], edgecolors='gray')
+        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, 1], edgecolors='gray')
         self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha], edgecolors='gray')
+        self.window.voxels(self._states == self._state_label['adjacent'], facecolors=[1, 0.7, 0, alpha], edgecolors='gray')
 
         if self.render_mode == "human":
             plt.draw()

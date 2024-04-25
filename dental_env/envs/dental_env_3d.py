@@ -188,13 +188,12 @@ class DentalEnv3DSTL(gym.Env):
 
         self._agent_location = np.array([np.ceil(self.size / 2) - 1, np.ceil(self.size / 2) - 1, self.size - 1],
                                     dtype=int)  # start from top center
-        # self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
-        # self._states[:, :, -1] = 0  # empty space
-        self._states = np.zeros((self.size, self.size, self.size), dtype=int)
-        self._states[:, self.size//6+1:self.size*5//6, :self.size*2//3] = 3  # adjacent
-        self._states[self.size//6+1:self.size*5//6, self.size//6+1:self.size*5//6, :self.size*2//3] = 2  # enamel
-        decay_idx = self.np_random.integers([self.size//6+1, self.size//6+1, 0], [self.size*5//6, self.size*5//6, self.size*2//3], size=(self.size*self.size*4//9, 3))
-        self._states[decay_idx[:,0], decay_idx[:,1], decay_idx[:,2]] = 1  # decay
+        self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
+        self._states[:, :, -1] = 0  # empty space
+        self._states[:, 0, :] = 0  # empty space
+        self._states[:, -1, :] = 0  # empty space
+        self._states[0, 1:-1, 0:-1] = 3  # adjacent
+        self._states[-1, 1:-1, 0:-1] = 3  # adjacent
 
         observation = self._get_obs()
         info = self._get_info()
@@ -213,25 +212,25 @@ class DentalEnv3DSTL(gym.Env):
 
         # burr pose update
         self.burr = self.burr_init.copy()
-        self.burr.apply_translation(self._agent_location)
-        volume_pcs = trimesh.sample.volume_mesh(self.burr, 10)
-        surface_pcs = trimesh.sample.sample_surface_even(self.burr, 40)[0]
+        self.burr.apply_translation(self._agent_location + [0.5, 0.5, 0])
+        volume_pcs = trimesh.sample.volume_mesh(self.burr, 100)
+        surface_pcs = trimesh.sample.sample_surface(self.burr, 100)[0]
         burr_pcs = np.concatenate((volume_pcs, np.array(surface_pcs)))
 
         # burr occupancy
-        burr_occupancy = trimesh.voxel.VoxelGrid(np.zeros((self.size, self.size, self.size)))
-        occupancy_idx = np.array([idx for idx in burr_occupancy.points_to_indices(burr_pcs) if np.all(idx < self.size) and np.all(idx >= 0)])
+        burr_occupancy = np.zeros((self.size, self.size, self.size), dtype=bool)
+        occupancy_idx = np.array([idx for idx in burr_pcs.astype(int) if np.all(idx < self.size) and np.all(idx >= 0)])
         if occupancy_idx.size > 0:
-            burr_occupancy.matrix[occupancy_idx[:,0],occupancy_idx[:,1],occupancy_idx[:,2]] = True
+            burr_occupancy[occupancy_idx[:,0],occupancy_idx[:,1],occupancy_idx[:,2]] = True
 
         # reward
-        reward_decay_removal = np.sum(burr_occupancy.matrix & (self._states == self._state_label['decay']))
-        reward_enamel_removal = np.sum(burr_occupancy.matrix & (self._states == self._state_label['enamel']))
-        reward_adjacent_removal = np.sum(burr_occupancy.matrix & (self._states == self._state_label['adjacent']))
+        reward_decay_removal = np.sum(burr_occupancy & (self._states == self._state_label['decay']))
+        reward_enamel_removal = np.sum(burr_occupancy & (self._states == self._state_label['enamel']))
+        reward_adjacent_removal = np.sum(burr_occupancy & (self._states == self._state_label['adjacent']))
         reward = 10 * reward_decay_removal - reward_enamel_removal - 10 * reward_adjacent_removal
 
         # state
-        self._states[burr_occupancy.matrix] = 0
+        self._states[burr_occupancy] = 0
 
         # termination
         terminated = ~np.any(self._states == self._state_label['decay'])  # no more decay
@@ -262,7 +261,7 @@ class DentalEnv3DSTL(gym.Env):
         self.window.clear()
 
         self.burr = self.burr_init.copy()
-        self.burr.apply_translation(self._agent_location)
+        self.burr.apply_translation(self._agent_location + [0.5, 0.5, 0])
         vertices = self.burr.vertices
         faces = self.burr.faces
         self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], triangles=faces, color='gray')

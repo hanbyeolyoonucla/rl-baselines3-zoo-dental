@@ -3,7 +3,6 @@ from gymnasium import spaces
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-import open3d as o3d
 import trimesh
 import logging
 logger = logging.getLogger("trimesh")
@@ -60,10 +59,10 @@ class DentalEnv3D(gym.Env):
                                         dtype=int)  # start from top center
         # self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
         # self._states[:, :, -1] = 0  # empty space
-        self._states = np.zeros((self.size, self.size, self.size))
+        self._states = np.zeros((self.size, self.size, self.size), dtype=int)
         self._states[:, self.size//6+1:self.size*5//6, :self.size*2//3] = 3  # adjacent
         self._states[self.size//6+1:self.size*5//6, self.size//6+1:self.size*5//6, :self.size*2//3] = 2  # enamel
-        decay_idx = self.np_random.integers([self.size//6+1, self.size//6+1, 0], [self.size*5//6, self.size*5//6, self.size*2//3], size=(self.size*self.size*2//9, 3))
+        decay_idx = self.np_random.integers([self.size//6+1, self.size//6+1, 0], [self.size*5//6, self.size*5//6, self.size*2//3], size=(self.size*self.size*4//9, 3))
         self._states[decay_idx[:,0], decay_idx[:,1], decay_idx[:,2]] = 1  # decay
 
         observation = self._get_obs()
@@ -195,7 +194,7 @@ class DentalEnv3DSTL(gym.Env):
         self._states = np.zeros((self.size, self.size, self.size), dtype=int)
         self._states[:, self.size//6+1:self.size*5//6, :self.size*2//3] = 3  # adjacent
         self._states[self.size//6+1:self.size*5//6, self.size//6+1:self.size*5//6, :self.size*2//3] = 2  # enamel
-        decay_idx = self.np_random.integers([self.size//6+1, self.size//6+1, 0], [self.size*5//6, self.size*5//6, self.size*2//3], size=(self.size*self.size*2//9, 3))
+        decay_idx = self.np_random.integers([self.size//6+1, self.size//6+1, 0], [self.size*5//6, self.size*5//6, self.size*2//3], size=(self.size*self.size*4//9, 3))
         self._states[decay_idx[:,0], decay_idx[:,1], decay_idx[:,2]] = 1  # decay
 
         observation = self._get_obs()

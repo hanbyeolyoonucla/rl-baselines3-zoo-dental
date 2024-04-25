@@ -18,7 +18,7 @@ DentalEnv2D-v0:
                        net_arch=dict(pi=[64,64], vf=[64,64])
                       )"
 
-DentalEnv3D-v0:
+DentalEnv3D-v0-size5:
   env_wrapper:
     - gymnasium.wrappers.FlattenObservation
   n_envs: 16
@@ -35,6 +35,26 @@ DentalEnv3D-v0:
   max_grad_norm: 0.5
   vf_coef: 0.8905730035374096
   policy_kwargs: "dict(activation_fn=nn.ReLU,
+                       net_arch=dict(pi=[64], vf=[64])
+                      )"
+
+DentalEnv3D-v0:
+  env_wrapper:
+    - gymnasium.wrappers.FlattenObservation
+  n_envs: 16
+  n_timesteps: !!float 1e6
+  policy: 'MlpPolicy'
+  n_steps: 1024
+  batch_size: 8
+  learning_rate: 0.21855234298448695
+  gae_lambda: 0.8
+  gamma: 0.9999
+  n_epochs: 1
+  ent_coef: 0.01831692570454826
+  clip_range: 0.1
+  max_grad_norm: 0.6
+  vf_coef: 0.3241147089335158
+  policy_kwargs: "dict(activation_fn=nn.Tanh,
                        net_arch=dict(pi=[64], vf=[64])
                       )"
 

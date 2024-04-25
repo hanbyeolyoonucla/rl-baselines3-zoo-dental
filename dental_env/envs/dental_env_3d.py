@@ -57,13 +57,12 @@ class DentalEnv3D(gym.Env):
 
         self._agent_location = np.array([np.ceil(self.size / 2) - 1, np.ceil(self.size / 2) - 1, self.size - 1],
                                         dtype=int)  # start from top center
-        # self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
-        # self._states[:, :, -1] = 0  # empty space
-        self._states = np.zeros((self.size, self.size, self.size), dtype=int)
-        self._states[:, self.size//6+1:self.size*5//6, :self.size*2//3] = 3  # adjacent
-        self._states[self.size//6+1:self.size*5//6, self.size//6+1:self.size*5//6, :self.size*2//3] = 2  # enamel
-        decay_idx = self.np_random.integers([self.size//6+1, self.size//6+1, 0], [self.size*5//6, self.size*5//6, self.size*2//3], size=(self.size*self.size*4//9, 3))
-        self._states[decay_idx[:,0], decay_idx[:,1], decay_idx[:,2]] = 1  # decay
+        self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
+        self._states[:, :, -1] = 0  # empty space
+        self._states[:, 0, :] = 0  # empty space
+        self._states[:, -1, :] = 0  # empty space
+        self._states[0, 1:-1, 0:-1] = 3  # adjacent
+        self._states[-1, 1:-1, 0:-1] = 3  # adjacent
 
         observation = self._get_obs()
         info = self._get_info()
@@ -117,8 +116,8 @@ class DentalEnv3D(gym.Env):
 
         alpha = 0.7
         self.window.clear()
-        burr = np.zeros_like(self._states, dtype=bool)
-        burr[self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = True
+        burr = np.zeros((self.size, self.size, self.size*2), dtype=bool)
+        burr[self._agent_location[0], self._agent_location[1], self._agent_location[2]:self._agent_location[2]+self.size] = True
         self.window.voxels(burr, facecolors=[0, 0, 1], edgecolors='grey')
         self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, 1], edgecolors='grey')
         self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha], edgecolors='grey')

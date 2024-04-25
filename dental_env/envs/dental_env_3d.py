@@ -11,7 +11,7 @@ logger.setLevel(logging.ERROR)
 class DentalEnv3D(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size=5):
+    def __init__(self, render_mode=None, size=11):
         self.size = size
         self.window_size = 512
 

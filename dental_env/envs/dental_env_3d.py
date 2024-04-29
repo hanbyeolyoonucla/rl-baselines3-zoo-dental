@@ -55,8 +55,9 @@ class DentalEnv3D(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self._agent_location = np.array([np.ceil(self.size / 2) - 1, np.ceil(self.size / 2) - 1, self.size - 1],
-                                        dtype=int)  # start from top center
+        # self._agent_location = np.array([self.size//2, self.size//2, self.size-1], dtype=int)  # start from top center
+        self._agent_location = np.append(self.np_random.integers(0, self.size, size=2),
+                                         self.size - 1).astype(int)  # start from random
         self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
         self._states[:, :, -1] = 0  # empty space
         self._states[:, 0, :] = 0  # empty space
@@ -84,7 +85,7 @@ class DentalEnv3D(gym.Env):
         reward_decay_removal = np.sum(burr_occupancy == self._state_label['decay'])
         reward_enamel_removal = np.sum(burr_occupancy == self._state_label['enamel'])
         reward_adjacent_removal = np.sum(burr_occupancy == self._state_label['adjacent'])
-        reward = 10 * reward_decay_removal - reward_enamel_removal - 10 * reward_adjacent_removal
+        reward = 10 * reward_decay_removal - 2 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
 
         # state
         self._states[self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = 0

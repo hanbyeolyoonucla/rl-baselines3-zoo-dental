@@ -145,6 +145,7 @@ class DentalEnv3DSTL(gym.Env):
         self.window_size = 512
         self.burr_init = trimesh.load('dental_env/cad/burr.stl')
         self.burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+        self.burr_init.apply_scale(2.5)
         self.burr = self.burr_init.copy()
 
         self.observation_space = spaces.Dict(
@@ -187,8 +188,10 @@ class DentalEnv3DSTL(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        self._agent_location = np.array([np.ceil(self.size / 2) - 1, np.ceil(self.size / 2) - 1, self.size - 1],
-                                    dtype=int)  # start from top center
+        # self._agent_location = np.array([np.ceil(self.size / 2) - 1, np.ceil(self.size / 2) - 1, self.size - 1],
+        #                             dtype=int)  # start from top center
+        self._agent_location = np.append(self.np_random.integers(0, self.size, size=2),
+                                         self.size - 1).astype(int)  # start from random
         self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
         self._states[:, :, -1] = 0  # empty space
         self._states[:, 0, :] = 0  # empty space
@@ -214,8 +217,8 @@ class DentalEnv3DSTL(gym.Env):
         # burr pose update
         self.burr = self.burr_init.copy()
         self.burr.apply_translation(self._agent_location + [0.5, 0.5, 0])
-        volume_pcs = trimesh.sample.volume_mesh(self.burr, 100)
-        surface_pcs = trimesh.sample.sample_surface(self.burr, 100)[0]
+        volume_pcs = trimesh.sample.volume_mesh(self.burr, 1000)
+        surface_pcs = trimesh.sample.sample_surface(self.burr, 1000)[0]
         burr_pcs = np.concatenate((volume_pcs, np.array(surface_pcs)))
 
         # burr occupancy
@@ -228,7 +231,7 @@ class DentalEnv3DSTL(gym.Env):
         reward_decay_removal = np.sum(burr_occupancy & (self._states == self._state_label['decay']))
         reward_enamel_removal = np.sum(burr_occupancy & (self._states == self._state_label['enamel']))
         reward_adjacent_removal = np.sum(burr_occupancy & (self._states == self._state_label['adjacent']))
-        reward = 10 * reward_decay_removal - reward_enamel_removal - 10 * reward_adjacent_removal
+        reward = 10 * reward_decay_removal - 2 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
 
         # state
         self._states[burr_occupancy] = 0
@@ -266,7 +269,7 @@ class DentalEnv3DSTL(gym.Env):
         vertices = self.burr.vertices
         faces = self.burr.faces
         self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], triangles=faces, color='gray')
-        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, 1], edgecolors='gray')
+        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, alpha], edgecolors='gray')
         self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha], edgecolors='gray')
         self.window.voxels(self._states == self._state_label['adjacent'], facecolors=[1, 0.7, 0, alpha], edgecolors='gray')
 

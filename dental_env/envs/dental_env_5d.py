@@ -34,15 +34,6 @@ class DentalEnv5D(gym.Env):
         }
 
         self.action_space = spaces.Box(-1, 1, shape=(5,), dtype=int)
-        self._action_to_direction = {
-            0: np.array([1, 0, 0]), 1: np.array([1, 1, 0]), 2: np.array([0, 1, 0]), 3: np.array([-1, 1, 0]),
-            4: np.array([-1, 0, 0]), 5: np.array([-1, -1, 0]), 6: np.array([0, -1, 0]), 7: np.array([1, -1, 0]),
-            8: np.array([1, 0, 1]), 9: np.array([1, 1, 1]), 10: np.array([0, 1, 1]), 11: np.array([-1, 1, 1]),
-            12: np.array([-1, 0, 1]), 13: np.array([-1, -1, 1]), 14: np.array([0, -1, 1]), 15: np.array([1, -1, 1]),
-            16: np.array([1, 0, -1]), 17: np.array([1, 1, -1]), 18: np.array([0, 1, -1]), 19: np.array([-1, 1, -1]),
-            20: np.array([-1, 0, -1]), 21: np.array([-1, -1, -1]), 22: np.array([0, -1, -1]), 23: np.array([1, -1, -1]),
-            24: np.array([0, 0, 1]), 25: np.array([0, 0, -1])
-        }
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -81,6 +72,7 @@ class DentalEnv5D(gym.Env):
 
     def step(self, action):
         # action
+        action[3:] = action[3:] * 5  # denormalize angle
         self._agent_location = np.clip(
             self._agent_location + action, [0, 0, 0, -90, -90], [self.size - 1, self.size - 1, self.size - 1, 90, 90]
         )
@@ -90,8 +82,8 @@ class DentalEnv5D(gym.Env):
         burr_zyx_euler = np.append(0, self._agent_location[3:]) * np.pi / 180
         burr_rotation = trimesh.transformations.euler_matrix(burr_zyx_euler[0], burr_zyx_euler[1], burr_zyx_euler[2], 'rzyx')
         self.burr = self.burr_init.copy()
-        self.burr.apply_translation(burr_position)
         self.burr.apply_transform(burr_rotation)
+        self.burr.apply_translation(burr_position)
         volume_pcs = trimesh.sample.volume_mesh(self.burr, 1000)
         surface_pcs = trimesh.sample.sample_surface(self.burr, 1000)[0]
         burr_pcs = np.concatenate((volume_pcs, np.array(surface_pcs)))
@@ -143,8 +135,8 @@ class DentalEnv5D(gym.Env):
         burr_zyx_euler = np.append(0, self._agent_location[3:]) * np.pi / 180
         burr_rotation = trimesh.transformations.euler_matrix(burr_zyx_euler[0], burr_zyx_euler[1], burr_zyx_euler[2], 'rzyx')
         self.burr = self.burr_init.copy()
-        self.burr.apply_translation(burr_position)
         self.burr.apply_transform(burr_rotation)
+        self.burr.apply_translation(burr_position)
         vertices = self.burr.vertices
         faces = self.burr.faces
         self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], alpha=0.3, triangles=faces,
@@ -157,10 +149,6 @@ class DentalEnv5D(gym.Env):
         if self.render_mode == "human":
             plt.draw()
             plt.pause(1 / self.metadata["render_fps"])
-        # else:
-        #     return np.transpose(
-        #         np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2)
-        #     )
 
     def close(self):
         if self.window is not None:

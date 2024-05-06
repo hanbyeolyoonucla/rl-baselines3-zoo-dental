@@ -268,7 +268,7 @@ class DentalEnv3DSTL(gym.Env):
         self.burr.apply_translation(self._agent_location + [0.5, 0.5, 0])
         vertices = self.burr.vertices
         faces = self.burr.faces
-        self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], triangles=faces, color='gray')
+        self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], alpha=0.3, triangles=faces, color='gray')
         self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, alpha], edgecolors='gray')
         self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha], edgecolors='gray')
         self.window.voxels(self._states == self._state_label['adjacent'], facecolors=[1, 0.7, 0, alpha], edgecolors='gray')

@@ -9,7 +9,7 @@ logger = logging.getLogger("trimesh")
 logger.setLevel(logging.ERROR)
 
 class DentalEnv5D(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+    metadata = {"render_modes": ["human", "rgb_array", "mesh"], "render_fps": 4}
 
     def __init__(self, render_mode=None, size=11):
         self.size = size
@@ -51,6 +51,8 @@ class DentalEnv5D(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
+        self.step_idx = 0
+
         # self._agent_location = np.array([np.ceil(self.size / 2) - 1, np.ceil(self.size / 2) - 1, self.size - 1],
         #                             dtype=int)  # start from top center
         self._agent_location = np.append(self.np_random.integers(0, self.size, size=2),
@@ -65,12 +67,15 @@ class DentalEnv5D(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        if self.render_mode == "human":
+        if self.render_mode == "human" or self.render_mode == "mesh":
             self._render_frame()
 
         return observation, info
 
     def step(self, action):
+
+
+        self.step_idx = self.step_idx + 1
         # action
         action[3:] = action[3:] * 5  # denormalize angle
         self._agent_location = np.clip(
@@ -111,7 +116,7 @@ class DentalEnv5D(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        if self.render_mode == "human":
+        if self.render_mode == "human" or self.render_mode == "mesh":
             self._render_frame()
 
         return observation, reward, terminated, False, info
@@ -128,27 +133,48 @@ class DentalEnv5D(gym.Env):
             self.window.set_ylabel('y')
             self.window.set_zlabel('z')
 
-        alpha = 0.7
-        self.window.clear()
+        if self.window is None and self.render_mode == "mesh":
+            self.window = trimesh.Scene()
+            self.window.camera_transform = trimesh.transformations.compose_matrix(angles= [np.pi/6, 0, np.pi/4], translate=[self.size*2, -self.size, self.size*4])
 
         burr_position = self._agent_location[:3] + np.array([0.5, 0.5, 0])  # voxel position correction
         burr_zyx_euler = np.append(0, self._agent_location[3:]) * np.pi / 180
-        burr_rotation = trimesh.transformations.euler_matrix(burr_zyx_euler[0], burr_zyx_euler[1], burr_zyx_euler[2], 'rzyx')
+        burr_rotation = trimesh.transformations.euler_matrix(burr_zyx_euler[0], burr_zyx_euler[1],
+                                                             burr_zyx_euler[2], 'rzyx')
         self.burr = self.burr_init.copy()
         self.burr.apply_transform(burr_rotation)
         self.burr.apply_translation(burr_position)
-        vertices = self.burr.vertices
-        faces = self.burr.faces
-        self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], alpha=0.3, triangles=faces,
-                                 color='gray')
-        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, alpha], edgecolors='gray')
-        self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha], edgecolors='gray')
-        self.window.voxels(self._states == self._state_label['adjacent'], facecolors=[1, 0.7, 0, alpha],
-                           edgecolors='gray')
 
         if self.render_mode == "human":
-            plt.draw()
-            plt.pause(1 / self.metadata["render_fps"])
+            vertices = self.burr.vertices
+            faces = self.burr.faces
+
+            alpha = 0.7
+            self.window.clear()
+            self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], alpha=0.3, triangles=faces,
+                                     color='gray')
+            self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, alpha],
+                               edgecolors='gray')
+            self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha],
+                               edgecolors='gray')
+            self.window.voxels(self._states == self._state_label['adjacent'], facecolors=[1, 0.7, 0, alpha],
+                               edgecolors='gray')
+
+            # plt.draw()
+            # plt.pause(1 / self.metadata["render_fps"])
+            plt.savefig('logs/episodes/figure_step_%d' % self.step_idx)
+
+        if self.render_mode == "mesh":
+            alpha = 0.7
+            self.window.geometry.clear()
+            decay_voxel = trimesh.voxel.base.VoxelGrid(self._states == self._state_label['decay']).as_boxes([1,0,0, alpha])
+            enamel_voxel = trimesh.voxel.base.VoxelGrid(self._states == self._state_label['enamel']).as_boxes([0,1,0, alpha])
+            adjacent_voxel = trimesh.voxel.base.VoxelGrid(self._states == self._state_label['adjacent']).as_boxes([0,0,1, alpha])
+            self.window.add_geometry([self.burr, decay_voxel, enamel_voxel, adjacent_voxel])
+
+            # self.window.show()
+            # self.window.save_image()
+
 
     def close(self):
         if self.window is not None:

@@ -187,12 +187,35 @@ class DentalEnv3DSTL(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-
-        # self._agent_location = np.array([np.ceil(self.size / 2) - 1, np.ceil(self.size / 2) - 1, self.size - 1],
-        #                             dtype=int)  # start from top center
+        # agent initialization
         self._agent_location = np.append(self.np_random.integers(0, self.size, size=2),
                                          self.size - 1).astype(int)  # start from random
-        self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
+        # state initialization
+        self._states = np.ones((self.size, self.size, self.size)) * 2
+        decay_position = self.np_random.integers(low=[1,1,0],high=[self.size-1, self.size-1, self.size-1], size=(5,3))
+        decay_size = self.np_random.integers(low=[1,1,1],high=[self.size*2//3, self.size*2//3, self.size*2//3], size=(5,3))
+
+        # decay 1
+        aa = np.append(1, decay_position[0, 1:])
+        bb = np.clip(aa+decay_size[0,:], 0, self.size-1)
+        self._states[aa[0]:bb[0], aa[1]:bb[1], aa[2]:bb[2]] = 1
+        # decay 2
+        aa = np.append(self.size-2, decay_position[1, 1:])
+        bb = np.clip(aa - decay_size[1, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+        # decay 3
+        aa = np.array([decay_position[2, 0], 1, decay_position[2, 2]])
+        bb = np.clip(aa + decay_size[2, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0], aa[1]:bb[1], aa[2]:bb[2]] = 1
+        # decay 4
+        aa = np.array([decay_position[3, 0], self.size-2, decay_position[3, 2]])
+        bb = np.clip(aa - decay_size[3, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+        # decay 5
+        aa = np.append(decay_position[4, 0:2], self.size-2)
+        bb = np.clip(aa - decay_size[4, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+
         self._states[:, :, -1] = 0  # empty space
         self._states[:, 0, :] = 0  # empty space
         self._states[:, -1, :] = 0  # empty space

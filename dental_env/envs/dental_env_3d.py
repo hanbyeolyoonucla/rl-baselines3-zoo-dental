@@ -145,7 +145,7 @@ class DentalEnv3DSTL(gym.Env):
         self.window_size = 512
         self.burr_init = trimesh.load('dental_env/cad/burr.stl')
         self.burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-        self.burr_init.apply_scale(2.5)
+        # self.burr_init.apply_scale(2.5)
         self.burr = self.burr_init.copy()
 
         self.observation_space = spaces.Dict(
@@ -191,7 +191,7 @@ class DentalEnv3DSTL(gym.Env):
         self._agent_location = np.append(self.np_random.integers(0, self.size, size=2),
                                          self.size - 1).astype(int)  # start from random
         # state initialization
-        self._states = np.ones((self.size, self.size, self.size)) * 2
+        self._states = np.ones((self.size, self.size, self.size), dtype=int) * 2
         decay_position = self.np_random.integers(low=[1,1,0],high=[self.size-1, self.size-1, self.size-1], size=(5,3))
         decay_size = self.np_random.integers(low=[1,1,1],high=[self.size*2//3, self.size*2//3, self.size*2//3], size=(5,3))
 

@@ -23,7 +23,7 @@ class DentalEnv5D(gym.Env):
             {
                 "agent_pos": spaces.Box(0, self.size - 1, shape=(3,), dtype=int),
                 "agent_ori": spaces.Box(-90, 90, shape=(2,), dtype=int),  # (Z)YX euler angle
-                "states": spaces.MultiDiscrete(4 * np.ones((self.size, self.size, self.size))),
+                "states": spaces.MultiDiscrete(4 * np.ones((self.size, self.size, self.size), dtype=np.int32)),
             }
         )
         self._state_label = {

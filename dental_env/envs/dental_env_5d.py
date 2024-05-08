@@ -136,8 +136,8 @@ class DentalEnv5D(gym.Env):
 
         # termination
         terminated = ~np.any(self._states == self._state_label['decay'])  # no more decay
-        # if terminated:
-        #   reward = reward + 10
+        if terminated:
+            reward = reward + 50
 
         observation = self._get_obs()
         info = self._get_info()

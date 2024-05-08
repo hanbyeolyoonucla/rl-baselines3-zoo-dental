@@ -55,16 +55,43 @@ class DentalEnv3D(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
 
-        # self._agent_location = np.array([self.size//2, self.size//2, self.size-1], dtype=int)  # start from top center
+        # agent initialization
         self._agent_location = np.append(self.np_random.integers(0, self.size, size=2),
                                          self.size - 1).astype(int)  # start from random
-        self._states = self.np_random.integers(1, 3, size=(self.size, self.size, self.size))
+        # state initialization
+        self._states = np.ones((self.size, self.size, self.size), dtype=int) * 2
+        decay_position = self.np_random.integers(low=[1, 1, 0], high=[self.size - 1, self.size - 1, self.size - 1],
+                                                 size=(5, 3))
+        decay_size = self.np_random.integers(low=[1, 1, 1],
+                                             high=[self.size * 2 // 3, self.size * 2 // 3, self.size * 2 // 3],
+                                             size=(5, 3))
+
+        # decay 1
+        aa = np.append(1, decay_position[0, 1:])
+        bb = np.clip(aa + decay_size[0, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0], aa[1]:bb[1], aa[2]:bb[2]] = 1
+        # decay 2
+        aa = np.append(self.size - 2, decay_position[1, 1:])
+        bb = np.clip(aa - decay_size[1, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+        # decay 3
+        aa = np.array([decay_position[2, 0], 1, decay_position[2, 2]])
+        bb = np.clip(aa + decay_size[2, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0], aa[1]:bb[1], aa[2]:bb[2]] = 1
+        # decay 4
+        aa = np.array([decay_position[3, 0], self.size - 2, decay_position[3, 2]])
+        bb = np.clip(aa - decay_size[3, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+        # decay 5
+        aa = np.append(decay_position[4, 0:2], self.size - 2)
+        bb = np.clip(aa - decay_size[4, :], 0, self.size - 1)
+        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+
         self._states[:, :, -1] = 0  # empty space
         self._states[:, 0, :] = 0  # empty space
         self._states[:, -1, :] = 0  # empty space
         self._states[0, 1:-1, 0:-1] = 3  # adjacent
         self._states[-1, 1:-1, 0:-1] = 3  # adjacent
-
         observation = self._get_obs()
         info = self._get_info()
 
@@ -85,15 +112,15 @@ class DentalEnv3D(gym.Env):
         reward_decay_removal = np.sum(burr_occupancy == self._state_label['decay'])
         reward_enamel_removal = np.sum(burr_occupancy == self._state_label['enamel'])
         reward_adjacent_removal = np.sum(burr_occupancy == self._state_label['adjacent'])
-        reward = 10 * reward_decay_removal - 2 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
+        reward = 10 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
 
         # state
         self._states[self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = 0
 
         # termination
         terminated = ~np.any(self._states == self._state_label['decay'])  # no more decay
-        # if terminated:
-        #   reward = reward + 10
+        if terminated:
+            reward = reward + 50
 
         observation = self._get_obs()
         info = self._get_info()
@@ -127,10 +154,6 @@ class DentalEnv3D(gym.Env):
         if self.render_mode == "human":
             plt.draw()
             plt.pause(1 / self.metadata["render_fps"])
-        # else:
-        #     return np.transpose(
-        #         np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2)
-        #     )
 
     def close(self):
         if self.window is not None:
@@ -254,15 +277,15 @@ class DentalEnv3DSTL(gym.Env):
         reward_decay_removal = np.sum(burr_occupancy & (self._states == self._state_label['decay']))
         reward_enamel_removal = np.sum(burr_occupancy & (self._states == self._state_label['enamel']))
         reward_adjacent_removal = np.sum(burr_occupancy & (self._states == self._state_label['adjacent']))
-        reward = 10 * reward_decay_removal - 2 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
+        reward = 10 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
 
         # state
         self._states[burr_occupancy] = 0
 
         # termination
         terminated = ~np.any(self._states == self._state_label['decay'])  # no more decay
-        # if terminated:
-        #   reward = reward + 10
+        if terminated:
+            reward = reward + 50
 
         observation = self._get_obs()
         info = self._get_info()
@@ -299,10 +322,6 @@ class DentalEnv3DSTL(gym.Env):
         if self.render_mode == "human":
             plt.draw()
             plt.pause(1 / self.metadata["render_fps"])
-        # else:
-        #     return np.transpose(
-        #         np.array(pygame.surfarray.pixels3d(canvas)), axes=(1, 0, 2)
-        #     )
 
     def close(self):
         if self.window is not None:

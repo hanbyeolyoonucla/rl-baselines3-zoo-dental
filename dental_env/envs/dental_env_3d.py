@@ -112,7 +112,7 @@ class DentalEnv3D(gym.Env):
         reward_decay_removal = np.sum(burr_occupancy == self._state_label['decay'])
         reward_enamel_removal = np.sum(burr_occupancy == self._state_label['enamel'])
         reward_adjacent_removal = np.sum(burr_occupancy == self._state_label['adjacent'])
-        reward = 10 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
+        reward = 30 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
 
         # state
         self._states[self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = 0

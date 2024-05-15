@@ -24,18 +24,18 @@ DentalEnv3D-v0:
   n_envs: 16
   n_timesteps: !!float 1e6
   policy: 'MlpPolicy'
-  n_steps: 16
-  batch_size: 128
-  learning_rate: 0.0001242846126832142
+  n_steps: 256
+  batch_size: 32
+  learning_rate: 0.0004916692271673747
   gae_lambda: 0.8
-  gamma: 0.95
+  gamma: 0.9
   n_epochs: 20
-  ent_coef: 2.1385407520480278e-07
-  clip_range: 0.2
-  max_grad_norm: 0.6
-  vf_coef: 0.7461384997107838
-  policy_kwargs: "dict(activation_fn=nn.Tanh,
-                       net_arch=dict(pi=[64,64], vf=[64,64])
+  ent_coef: 3.8377496464408934e-08
+  clip_range: 0.3
+  max_grad_norm: 0.5
+  vf_coef: 0.8552552413064329
+  policy_kwargs: "dict(activation_fn=nn.ReLU,
+                       net_arch=dict(pi=[256,256], vf=[256,256])
                       )"
 
 DentalEnv3D-v1:
@@ -68,14 +68,14 @@ DentalEnv5D-v0:
   batch_size: 128
   learning_rate: 0.0001242846126832142
   gae_lambda: 0.8
-  gamma: 0.95
+  gamma: 0.9
   n_epochs: 20
   ent_coef: 2.1385407520480278e-07
   clip_range: 0.2
   max_grad_norm: 0.6
   vf_coef: 0.7461384997107838
-  policy_kwargs: "dict(activation_fn=nn.Tanh,
-                       net_arch=dict(pi=[64,64], vf=[64,64])
+  policy_kwargs: "dict(activation_fn=nn.ReLU,
+                       net_arch=dict(pi=[256,256], vf=[256,256])
                       )"
 
 atari:

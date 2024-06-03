@@ -26,23 +26,28 @@ class CustomCNN3D(BaseFeaturesExtractor):
         observation_space: gym.Space,
         features_dim: int = 512,
         # normalized_image: bool = False,
+        normalize_image: bool = False,
     ) -> None:
         super().__init__(observation_space, features_dim)
         # We assume CxDXHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
-        n_input_channels = observation_space.shape[0]
+        # n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv3d(n_input_channels, 32, kernel_size=8, stride=4, padding=0),
+            # nn.Conv3d(1, 32, kernel_size=8, stride=4, padding=0),
+            nn.Conv3d(1, 32, kernel_size=4, stride=2, padding=0),
             nn.ReLU(),
-            nn.Conv3d(32, 64, kernel_size=4, stride=2, padding=0),
-            nn.ReLU(),
-            nn.Conv3d(64, 64, kernel_size=3, stride=1, padding=0),
-            nn.ReLU(),
+            # nn.Conv3d(32, 64, kernel_size=4, stride=2, padding=0),
+            # nn.ReLU(),
+            # nn.Conv3d(64, 64, kernel_size=3, stride=1, padding=0),
+            # nn.ReLU(),
             nn.Flatten(),
         )
 
         # Compute shape by doing one forward pass
         with th.no_grad():
+            a = observation_space.sample()[None]
+            b = th.as_tensor(observation_space.sample()[None]).float()
+            c = self.cnn(th.as_tensor(observation_space.sample()[None]).float())
             n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None]).float()).shape[1]
 
         self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
@@ -77,7 +82,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
         total_concat_size = 0
         for key, subspace in observation_space.spaces.items():
-            if key == 'image':
+            if key == 'states':
                 extractors[key] = CustomCNN3D(subspace, features_dim=cnn_output_dim)
                 total_concat_size += cnn_output_dim
             else:

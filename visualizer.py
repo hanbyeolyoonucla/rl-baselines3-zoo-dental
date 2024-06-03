@@ -13,7 +13,8 @@ wrapped_env = gym.wrappers.FlattenObservation(env)
 
 policy_kwargs = dict(
             features_extractor_class=CustomCombinedExtractor,
-            features_extractor_kwargs=dict(cnn_output_dim=512)
+            features_extractor_kwargs=dict(cnn_output_dim=512),
+            normalize_images=False
         )
 model = PPO("MultiInputPolicy", env, policy_kwargs=policy_kwargs)
 # model = PPO("MlpPolicy", wrapped_env, verbose=1)

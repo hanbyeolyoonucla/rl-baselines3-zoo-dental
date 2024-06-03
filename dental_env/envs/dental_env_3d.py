@@ -11,22 +11,24 @@ logger.setLevel(logging.ERROR)
 class DentalEnv3D(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size=11):
+    def __init__(self, render_mode=None, size=11, channel=4):
         self.size = size
         self.window_size = 512
 
-        self.observation_space = spaces.Dict(
-            {
-                "agent": spaces.Box(0, self.size - 1, shape=(3,), dtype=int),
-                "states": spaces.MultiDiscrete(4 * np.ones((self.size, self.size, self.size))),
-            }
-        )
         self._state_label = {
             "empty": 0,
             "decay": 1,
             "enamel": 2,
             "adjacent": 3,
         }
+        self.channel = len(self._state_label)
+        self.observation_space = spaces.Dict(
+            {
+                "agent": spaces.Box(0, self.size - 1, shape=(3,), dtype=np.int),
+                # "states": spaces.MultiDiscrete(4 * np.ones((self.size, self.size, self.size))),
+                "states": spaces.Box(0, 1, shape=(self.channel, self.size, self.size, self.size), dtype=np.bool),
+            }
+        )
 
         self.action_space = spaces.Discrete(26)
         self._action_to_direction = {
@@ -59,39 +61,52 @@ class DentalEnv3D(gym.Env):
         self._agent_location = np.append(self.np_random.integers(0, self.size, size=2),
                                          self.size - 1).astype(int)  # start from random
         # state initialization
-        self._states = np.ones((self.size, self.size, self.size), dtype=int) * 2
+        self._states = np.zeros((self.channel, self.size, self.size, self.size), dtype=bool)
+        self._decay = np.zeros((self.size, self.size, self.size), dtype=bool)
+        self._empty = np.zeros((self.size, self.size, self.size), dtype=bool)
+        self._enamel = np.zeros((self.size, self.size, self.size), dtype=bool)
+        self._adjacent = np.zeros((self.size, self.size, self.size), dtype=bool)
+
+        # random initialize decay
         decay_position = self.np_random.integers(low=[1, 1, 0], high=[self.size - 1, self.size - 1, self.size - 1],
                                                  size=(5, 3))
         decay_size = self.np_random.integers(low=[1, 1, 1],
                                              high=[self.size * 2 // 3, self.size * 2 // 3, self.size * 2 // 3],
                                              size=(5, 3))
-
-        # decay 1
+        # decay 1: yz plane
         aa = np.append(1, decay_position[0, 1:])
         bb = np.clip(aa + decay_size[0, :], 0, self.size - 1)
-        self._states[aa[0]:bb[0], aa[1]:bb[1], aa[2]:bb[2]] = 1
-        # decay 2
+        self._decay[aa[0]:bb[0], aa[1]:bb[1], aa[2]:bb[2]] = 1
+        # decay 2: yz plane
         aa = np.append(self.size - 2, decay_position[1, 1:])
         bb = np.clip(aa - decay_size[1, :], 0, self.size - 1)
-        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+        self._decay[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
         # decay 3
         aa = np.array([decay_position[2, 0], 1, decay_position[2, 2]])
         bb = np.clip(aa + decay_size[2, :], 0, self.size - 1)
-        self._states[aa[0]:bb[0], aa[1]:bb[1], aa[2]:bb[2]] = 1
+        self._decay[aa[0]:bb[0], aa[1]:bb[1], aa[2]:bb[2]] = 1
         # decay 4
         aa = np.array([decay_position[3, 0], self.size - 2, decay_position[3, 2]])
         bb = np.clip(aa - decay_size[3, :], 0, self.size - 1)
-        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+        self._decay[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
         # decay 5
         aa = np.append(decay_position[4, 0:2], self.size - 2)
         bb = np.clip(aa - decay_size[4, :], 0, self.size - 1)
-        self._states[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
+        self._decay[aa[0]:bb[0]:-1, aa[1]:bb[1]:-1, aa[2]:bb[2]:-1] = 1
 
-        self._states[:, :, -1] = 0  # empty space
-        self._states[:, 0, :] = 0  # empty space
-        self._states[:, -1, :] = 0  # empty space
-        self._states[0, 1:-1, 0:-1] = 3  # adjacent
-        self._states[-1, 1:-1, 0:-1] = 3  # adjacent
+        self._empty[:, :, -1] = 1  # empty space
+        self._empty[:, 0, :] = 1  # empty space
+        self._empty[:, -1, :] = 1  # empty space
+        self._adjacent[0, 1:-1, 0:-1] = 1  # adjacent
+        self._adjacent[-1, 1:-1, 0:-1] = 1  # adjacent
+        self._decay[self._empty & self._adjacent] = 0  # make sure no decay on empty and adjacent
+        self._enamel[~self._decay & ~self._empty & ~self._adjacent] = 1  # enamel
+
+        self._states[self._state_label['empty']] = self._empty
+        self._states[self._state_label['decay']] = self._decay
+        self._states[self._state_label['enamel']] = self._enamel
+        self._states[self._state_label['adjacent']] = self._adjacent
+
         observation = self._get_obs()
         info = self._get_info()
 
@@ -108,19 +123,27 @@ class DentalEnv3D(gym.Env):
         )
 
         # reward
-        burr_occupancy = self._states[self._agent_location[0], self._agent_location[1], self._agent_location[2]:]
-        reward_decay_removal = np.sum(burr_occupancy == self._state_label['decay'])
-        reward_enamel_removal = np.sum(burr_occupancy == self._state_label['enamel'])
-        reward_adjacent_removal = np.sum(burr_occupancy == self._state_label['adjacent'])
+        # burr_occupancy = self._states[self._agent_location[0], self._agent_location[1], self._agent_location[2]:]
+        # reward_decay_removal = np.sum(burr_occupancy == self._state_label['decay'])
+        # reward_enamel_removal = np.sum(burr_occupancy == self._state_label['enamel'])
+        # reward_adjacent_removal = np.sum(burr_occupancy == self._state_label['adjacent'])
+        # reward = 30 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
+
+        burr_decay_occupancy = self._states[self._state_label['decay'], self._agent_location[0], self._agent_location[1], self._agent_location[2]:]
+        burr_enamel_occupancy = self._states[self._state_label['enamel'], self._agent_location[0], self._agent_location[1], self._agent_location[2]:]
+        burr_adjacent_occupancy = self._states[self._state_label['adjacent'], self._agent_location[0], self._agent_location[1], self._agent_location[2]:]
+        self._states[self._state_label['decay'], self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = 0
+        self._states[self._state_label['enamel'], self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = 0
+        self._states[self._state_label['adjacent'], self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = 0
+        reward_decay_removal = np.sum(burr_decay_occupancy)
+        reward_enamel_removal = np.sum(burr_enamel_occupancy)
+        reward_adjacent_removal = np.sum(burr_adjacent_occupancy)
         reward = 30 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_adjacent_removal - 1
 
-        # state
-        self._states[self._agent_location[0], self._agent_location[1], self._agent_location[2]:] = 0
-
         # termination
-        terminated = ~np.any(self._states == self._state_label['decay'])  # no more decay
-        if terminated:
-            reward = reward + 50
+        terminated = ~np.any(self._states[self._state_label['decay']])  # no more decay
+        # if terminated:
+        #     reward = reward + 50
 
         observation = self._get_obs()
         info = self._get_info()

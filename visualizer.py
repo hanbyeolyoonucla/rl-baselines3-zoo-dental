@@ -19,17 +19,20 @@ policy_kwargs = dict(
 model = PPO("MultiInputPolicy", env, policy_kwargs=policy_kwargs)
 # model = PPO("MlpPolicy", wrapped_env, verbose=1)
 
-model.learn(total_timesteps=10)
+# model.learn(total_timesteps=10)
 
 observation, info = env.reset(seed=42)
 # observation, info = wrapped_env.reset(seed=42)
 
-for _ in range(100):
+for _ in range(10):
     # action = wrapped_env.action_space.sample()
-    # action = env.action_space.sample()
-    action, _ = model.predict(observation)
+    action = env.action_space.sample()
+    # action, _ = model.predict(observation)
     # observation, reward, terminated, truncated, info = wrapped_env.step(action)
     observation, reward, terminated, truncated, info = env.step(action)
+    print(reward)
+    print(terminated)
+    print(truncated)
 
     if terminated or truncated:
         observation, info = env.reset()

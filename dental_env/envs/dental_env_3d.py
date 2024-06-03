@@ -24,9 +24,9 @@ class DentalEnv3D(gym.Env):
         self.channel = len(self._state_label)
         self.observation_space = spaces.Dict(
             {
-                "agent": spaces.Box(0, self.size - 1, shape=(3,), dtype=np.int),
+                "agent": spaces.Box(0, self.size - 1, shape=(3,), dtype=int),
                 # "states": spaces.MultiDiscrete(4 * np.ones((self.size, self.size, self.size))),
-                "states": spaces.Box(0, 1, shape=(self.channel, self.size, self.size, self.size), dtype=np.bool),
+                "states": spaces.Box(0, 1, shape=(self.channel, self.size, self.size, self.size), dtype=bool),
             }
         )
 
@@ -170,9 +170,9 @@ class DentalEnv3D(gym.Env):
         burr = np.zeros((self.size, self.size, self.size*2), dtype=bool)
         burr[self._agent_location[0], self._agent_location[1], self._agent_location[2]:self._agent_location[2]+self.size] = True
         self.window.voxels(burr, facecolors=[0, 0, 1], edgecolors='grey')
-        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, 1], edgecolors='grey')
-        self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha], edgecolors='grey')
-        self.window.voxels(self._states == self._state_label['adjacent'], facecolors=[1, 0.7, 0, alpha], edgecolors='grey')
+        self.window.voxels(self._states[self._state_label['decay']], facecolors=[1, 0, 0, 1], edgecolors='grey')
+        self.window.voxels(self._states[self._state_label['enamel']], facecolors=[0, 1, 0, alpha], edgecolors='grey')
+        self.window.voxels(self._states[self._state_label['adjacent']], facecolors=[1, 0.7, 0, alpha], edgecolors='grey')
 
         if self.render_mode == "human":
             plt.draw()
@@ -338,9 +338,9 @@ class DentalEnv3DSTL(gym.Env):
         vertices = self.burr.vertices
         faces = self.burr.faces
         self.window.plot_trisurf(vertices[:, 0], vertices[:, 1], vertices[:, 2], alpha=0.3, triangles=faces, color='gray')
-        self.window.voxels(self._states == self._state_label['decay'], facecolors=[1, 0, 0, alpha], edgecolors='gray')
-        self.window.voxels(self._states == self._state_label['enamel'], facecolors=[0, 1, 0, alpha], edgecolors='gray')
-        self.window.voxels(self._states == self._state_label['adjacent'], facecolors=[1, 0.7, 0, alpha], edgecolors='gray')
+        self.window.voxels(self._states[self._state_label['decay']], facecolors=[1, 0, 0, alpha], edgecolors='gray')
+        self.window.voxels(self._states[self._state_label['enamel']], facecolors=[0, 1, 0, alpha], edgecolors='gray')
+        self.window.voxels(self._states[self._state_label['adjacent']], facecolors=[1, 0.7, 0, alpha], edgecolors='gray')
 
         if self.render_mode == "human":
             plt.draw()

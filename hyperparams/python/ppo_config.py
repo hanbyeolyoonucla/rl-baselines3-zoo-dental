@@ -24,7 +24,7 @@ class CustomCNN3D(BaseFeaturesExtractor):
     def __init__(
         self,
         observation_space: gym.Space,
-        features_dim: int = 512,
+        features_dim: int = 256,
         # normalized_image: bool = False,
         normalize_image: bool = False,
     ) -> None:
@@ -33,9 +33,13 @@ class CustomCNN3D(BaseFeaturesExtractor):
         # Re-ordering will be done by pre-preprocessing or wrapper
         # n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            # nn.Conv3d(1, 32, kernel_size=8, stride=4, padding=0),
-            nn.Conv3d(1, 32, kernel_size=4, stride=2, padding=0),
+            nn.Conv3d(observation_space.shape[0], 16, kernel_size=4, stride=2, padding=0),
             nn.ReLU(),
+            nn.Conv3d(16, 32, kernel_size=3, stride=1, padding=0),
+            nn.ReLU(),
+            # original structure
+            # nn.Conv3d(4, 32, kernel_size=8, stride=4, padding=0),
+            # nn.ReLU(),
             # nn.Conv3d(32, 64, kernel_size=4, stride=2, padding=0),
             # nn.ReLU(),
             # nn.Conv3d(64, 64, kernel_size=3, stride=1, padding=0),
@@ -45,9 +49,6 @@ class CustomCNN3D(BaseFeaturesExtractor):
 
         # Compute shape by doing one forward pass
         with th.no_grad():
-            a = observation_space.sample()[None]
-            b = th.as_tensor(observation_space.sample()[None]).float()
-            c = self.cnn(th.as_tensor(observation_space.sample()[None]).float())
             n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None]).float()).shape[1]
 
         self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
@@ -121,7 +122,8 @@ hyperparams = {
         policy_kwargs=dict(
             activation_fn=nn.ReLU,
             features_extractor_class=CustomCombinedExtractor,
-            features_extractor_kwargs=dict(cnn_output_dim=512)
+            features_extractor_kwargs=dict(cnn_output_dim=256),
+            normalize_images=False
         ),
     )
 }

@@ -9,14 +9,18 @@ from hyperparams.python.ppo_config import CustomCombinedExtractor
 # print(f"CUDA version: {torch.version.cuda}")
 
 env = gym.make("DentalEnv3D-v0", render_mode="human", size=11, max_episode_steps=10)  # , render_mode="human"
-wrapped_env = gym.wrappers.FlattenObservation(env)
 
-policy_kwargs = dict(
-            features_extractor_class=CustomCombinedExtractor,
-            features_extractor_kwargs=dict(cnn_output_dim=512),
-            normalize_images=False
-        )
-model = PPO("MultiInputPolicy", env, policy_kwargs=policy_kwargs)
+
+# wrapped_env = gym.wrappers.FlattenObservation(env)
+#
+# policy_kwargs = dict(
+#             features_extractor_class=CustomCombinedExtractor,
+#             features_extractor_kwargs=dict(cnn_output_dim=512),
+#             normalize_images=False
+#         )
+# model = PPO("MultiInputPolicy", env, policy_kwargs=policy_kwargs)
+
+
 # model = PPO("MlpPolicy", wrapped_env, verbose=1)
 
 # model.learn(total_timesteps=10)
@@ -38,4 +42,4 @@ for _ in range(10):
         observation, info = env.reset()
 
 env.close()
-wrapped_env.close()
+# wrapped_env.close()

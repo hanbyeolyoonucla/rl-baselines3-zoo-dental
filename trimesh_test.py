@@ -1,9 +1,30 @@
 import dental_env
 import trimesh
+import numpy as np
+import open3d as o3d
 
 # print(torch.__version__)
 # print(f"Is CUDA supported by this system? {torch.cuda.is_available()}")
 # print(f"CUDA version: {torch.version.cuda}")
+
+def _np_to_voxels(state):
+    voxel_grid = o3d.geometry.VoxelGrid()
+    voxel_grid.voxel_size = 1
+    for z in range(state.shape[3]):
+        for y in range(state.shape[2]):
+            for x in range(state.shape[1]):
+                if state[2, x, y, z] == 1:
+                    continue
+                voxel = o3d.geometry.Voxel()
+                if state[1, x, y, z] == 1:
+                    voxel.color = np.array([1, 0, 0])
+                elif state[0, x, y, z] == 1:
+                    voxel.color = np.array([0, 1, 0])
+                # elif state[self._state_label['adjacent'], x, y, z] == 1:
+                #     voxel.color = np.array([1, 0.7, 0])
+                voxel.grid_index = np.array([x, y, z])
+                voxel_grid.add_voxel(voxel)
+    return voxel_grid
 
 
 burr = trimesh.load('dental_env/cad/burr.stl')
@@ -17,14 +38,26 @@ enamel = trimesh.load('dental_env/cad/enamel.stl')
 # scene.add_geometry(trimesh.creation.axis())
 # scene.show()
 
+resolution = 0.1
+dim = 100
+cary_voxel = trimesh.voxel.creation.voxelize(cary, resolution)
+enamel_voxel = trimesh.voxel.creation.voxelize(enamel, resolution)
+local_cary_voxel = trimesh.voxel.creation.local_voxelize(cary, [0,0,0], resolution, dim//2)
+local_enamel_voxel = trimesh.voxel.creation.local_voxelize(enamel, [0, 0, 0], resolution, dim//2)
 
-burr_voxel = trimesh.voxel.creation.voxelize(burr, pitch=0.1)
-cary_voxel = trimesh.voxel.creation.voxelize(cary, pitch=0.1)
-enamel_voxel = trimesh.voxel.creation.voxelize(enamel, pitch=0.1)
+# scene = trimesh.Scene()
+# scene.add_geometry(local_cary_voxel.marching_cubes)
+# scene.add_geometry(local_enamel_voxel.marching_cubes)
+# scene.show()
 
-scene = trimesh.Scene()
-scene.add_geometry(burr_voxel.marching_cubes)
-scene.add_geometry(cary_voxel.marching_cubes)
-scene.add_geometry(enamel_voxel.marching_cubes)
-scene.add_geometry(trimesh.creation.axis())
-scene.show()
+channel = 3
+size = 101
+states = np.zeros((channel,size,size,size),dtype=bool)
+states[0] = local_enamel_voxel.matrix
+states[1] = local_cary_voxel.matrix
+states[2] = ~local_cary_voxel.matrix & ~local_enamel_voxel.matrix
+
+states_voxel = _np_to_voxels(states)
+
+o3d.visualization.draw_geometries([states_voxel])
+

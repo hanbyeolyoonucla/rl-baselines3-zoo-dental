@@ -4,7 +4,7 @@ import torch
 from stable_baselines3 import PPO
 from hyperparams.python.ppo_config import CustomCombinedExtractor
 
-env = gym.make("DentalEnv3D-v1", render_mode="open3d", size=11, max_episode_steps=100)  # , render_mode="human"
+env = gym.make("DentalEnv3D-v2", render_mode="open3d", size=51, max_episode_steps=100)
 
 # policy_kwargs = dict(
 #             features_extractor_class=CustomCombinedExtractor,
@@ -22,6 +22,7 @@ for _ in range(1000):
     observation, reward, terminated, truncated, _ = env.step(action)
     print(reward)
     if terminated or truncated:
+        env.close()
         observation, info = env.reset()
 
 env.close()

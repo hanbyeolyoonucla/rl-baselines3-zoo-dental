@@ -19,6 +19,12 @@ register(
 )
 
 register(
+     id="DentalEnv3D-v2",
+     entry_point="dental_env.envs:DentalEnv3DSTLALL",
+     max_episode_steps=300,
+)
+
+register(
      id="DentalEnv5D-v0",
      entry_point="dental_env.envs:DentalEnv5D",
      max_episode_steps=300,

@@ -2,6 +2,7 @@ import dental_env
 import trimesh
 import numpy as np
 import open3d as o3d
+import time
 
 # print(torch.__version__)
 # print(f"Is CUDA supported by this system? {torch.cuda.is_available()}")
@@ -26,10 +27,26 @@ def _np_to_voxels(state):
                 voxel_grid.add_voxel(voxel)
     return voxel_grid
 
+def _np_to_burr_voxels(burr):
+    voxel_grid = o3d.geometry.VoxelGrid()
+    voxel_grid.voxel_size = 1
+    for z in range(burr.shape[2]):
+        for y in range(burr.shape[1]):
+            for x in range(burr.shape[1]):
+                if burr[x, y, z] == 0:
+                    continue
+                voxel = o3d.geometry.Voxel()
+                voxel.color = np.array([0, 0, 1])
+                voxel.grid_index = np.array([x, y, z])
+                voxel_grid.add_voxel(voxel)
+    return voxel_grid
+
 
 burr = trimesh.load('dental_env/cad/burr.stl')
 cary = trimesh.load('dental_env/cad/cary.stl')
 enamel = trimesh.load('dental_env/cad/enamel.stl')
+
+burr.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
 
 # scene = trimesh.Scene()
 # scene.add_geometry(burr)
@@ -42,22 +59,25 @@ resolution = 0.1
 dim = 100
 cary_voxel = trimesh.voxel.creation.voxelize(cary, resolution)
 enamel_voxel = trimesh.voxel.creation.voxelize(enamel, resolution)
-local_cary_voxel = trimesh.voxel.creation.local_voxelize(cary, [0,0,0], resolution, dim//2)
+burr_voxel = trimesh.voxel.creation.voxelize(burr, resolution)
+local_cary_voxel = trimesh.voxel.creation.local_voxelize(cary, [0, 0, 0], resolution, dim//2)
 local_enamel_voxel = trimesh.voxel.creation.local_voxelize(enamel, [0, 0, 0], resolution, dim//2)
+curr = time.time()
+local_burr_voxel = trimesh.voxel.creation.local_voxelize(burr, [0, 0, 0], resolution, dim//2)
+print(time.time() - curr)
 
-# scene = trimesh.Scene()
-# scene.add_geometry(local_cary_voxel.marching_cubes)
-# scene.add_geometry(local_enamel_voxel.marching_cubes)
-# scene.show()
+burr_states = local_burr_voxel.matrix
+burr_occ_voxel = _np_to_burr_voxels(burr_states)
 
 channel = 3
 size = 101
 states = np.zeros((channel,size,size,size),dtype=bool)
-states[0] = local_enamel_voxel.matrix
-states[1] = local_cary_voxel.matrix
-states[2] = ~local_cary_voxel.matrix & ~local_enamel_voxel.matrix
-
+states[0] = local_enamel_voxel.matrix & ~local_burr_voxel.matrix
+states[1] = local_cary_voxel.matrix & ~local_burr_voxel.matrix
+states[2] = ~states[0] & ~states[1]
 states_voxel = _np_to_voxels(states)
 
+
+occ = local_burr_voxel.matrix & local_cary_voxel.matrix
 o3d.visualization.draw_geometries([states_voxel])
 

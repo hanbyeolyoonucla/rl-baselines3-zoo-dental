@@ -21,7 +21,7 @@ register(
 register(
      id="DentalEnv3D-v2",
      entry_point="dental_env.envs:DentalEnv3DSTLALL",
-     max_episode_steps=300,
+     max_episode_steps=1000,
 )
 
 register(

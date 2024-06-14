@@ -6,6 +6,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import trimesh
 import logging
 import open3d as o3d
+import copy
 logger = logging.getLogger("trimesh")
 logger.setLevel(logging.ERROR)
 
@@ -444,14 +445,14 @@ class DentalEnv3DSTL(gym.Env):
             self._states_voxel = self._np_to_voxels(self._states)
             # self._burr_voxel = self._np_to_burr_voxels(self._burr_occupancy)
             self.burr_vis = self.burr_vis_init
-            self.burr_vis.translate(self._agent_location + [0.5, 0.5, 0], relative=False)
+            self.burr_vis.translate(self.burr_vis.get_center() + self._agent_location + [0.5, 0.5, 0], relative=False)
             self.window.add_geometry(self._states_voxel)
             self.window.add_geometry(self.burr_vis)
 
         if self.render_mode == "open3d":
             for idx in np.argwhere(self._burr_occupancy):
                 self._states_voxel.remove_voxel(idx)
-            self.burr_vis.translate(self._agent_location + [0.5, 0.5, 0], relative=False)
+            self.burr_vis.translate(self.burr_vis.get_center() + self._agent_location + [0.5, 0.5, 0], relative=False)
             self.window.update_geometry(self._states_voxel)
             self.window.update_geometry(self.burr_vis)
             self.window.poll_events()
@@ -502,7 +503,6 @@ class DentalEnv3DSTLALL(gym.Env):
         self.burr_vis_init.scale(scale=1 / self.resolution,center=[0,0,0])
         self.burr_init = trimesh.load('dental_env/cad/burr.stl')
         self.burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-        # self.burr_init.apply_scale(1/self.resolution)
         self.burr = self.burr_init.copy()
 
         self._state_label = {
@@ -560,7 +560,12 @@ class DentalEnv3DSTLALL(gym.Env):
         # self._states[self._state_label['adjacent']] = self._adjacent
 
         # burr initialization
-        self._burr_occupancy = np.zeros((self.size, self.size, self.size), dtype=bool)
+        self.burr = self.burr_init.copy()
+        position = (self._agent_location - self.dim // 2) * self.resolution
+        self.burr.apply_translation(position)
+        self.burr_voxel = trimesh.voxel.creation.local_voxelize(self.burr, [0, 0, 0], self.resolution, self.dim // 2)
+        self._burr_occupancy = self.burr_voxel.matrix
+        # self._burr_occupancy = np.zeros((self.size, self.size, self.size), dtype=bool)
 
         observation = self._get_obs()
         info = self._get_info()
@@ -656,21 +661,26 @@ class DentalEnv3DSTLALL(gym.Env):
             self.window = o3d.visualization.Visualizer()
             self.window.create_window(window_name='Cut Path Episode', width=540, height=540, left=50, top=50, visible=True)
             self._states_voxel = self._np_to_voxels(self._states)
-            self._burr_voxel = self._np_to_burr_voxels(self._burr_occupancy)
-            self.burr_vis = self.burr_vis_init
-            self.burr_vis.translate(self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            self.burr_vis = copy.deepcopy(self.burr_vis_init)
+            self._burr_voxel = o3d.geometry.VoxelGrid()
+            # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
+            print(self.burr_vis.get_center())
+            self.burr_vis.translate(self.burr_vis.get_center() + self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self.window.add_geometry(self._states_voxel)
             self.window.add_geometry(self.burr_vis)
-            self.window.add_geometry(self._burr_voxel)
+            # self.window.add_geometry(self._burr_voxel)
 
 
         if self.render_mode == "open3d":
             for idx in np.argwhere(self._burr_occupancy):
                 self._states_voxel.remove_voxel(idx)
-            self.burr_vis.translate(self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            print(self.burr_vis.get_center())
+            self.burr_vis.translate(self.burr_vis.get_center() + self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self.window.update_geometry(self._states_voxel)
             self.window.update_geometry(self.burr_vis)
-            self.window.add_geometry(self._burr_voxel)
+            check = np.sum(self._burr_occupancy)
+            # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
+            # self.window.update_geometry(self._burr_voxel)
             self.window.poll_events()
             self.window.update_renderer()
 
@@ -693,8 +703,9 @@ class DentalEnv3DSTLALL(gym.Env):
                     voxel_grid.add_voxel(voxel)
         return voxel_grid
 
-    def _np_to_burr_voxels(self, burr):
-        voxel_grid = o3d.geometry.VoxelGrid()
+    def _np_to_burr_voxels(self, burr, voxel_grid):
+        # voxel_grid = o3d.geometry.VoxelGrid()
+        voxel_grid.clear()
         voxel_grid.voxel_size = 1
         for z in range(burr.shape[2]):
             for y in range(burr.shape[1]):
@@ -705,7 +716,7 @@ class DentalEnv3DSTLALL(gym.Env):
                     voxel.color = np.array([0, 0, 1])
                     voxel.grid_index = np.array([x, y, z])
                     voxel_grid.add_voxel(voxel)
-        return voxel_grid
+        # return voxel_grid
 
     def close(self):
         if self.window is not None and self.render_mode == "pyplot":

@@ -4,7 +4,7 @@ import torch
 from stable_baselines3 import PPO
 from hyperparams.python.ppo_config import CustomCombinedExtractor
 
-env = gym.make("DentalEnv3D-v2", render_mode="open3d", size=101, max_episode_steps=100)
+env = gym.make("DentalEnv3D-v2", render_mode="open3d", size=101, max_episode_steps=50)
 
 # policy_kwargs = dict(
 #             features_extractor_class=CustomCombinedExtractor,

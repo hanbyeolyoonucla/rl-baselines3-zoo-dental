@@ -503,7 +503,6 @@ class DentalEnv3DSTLALL(gym.Env):
         self.burr_vis_init.scale(scale=1 / self.resolution,center=[0,0,0])
         self.burr_init = trimesh.load('dental_env/cad/burr.stl')
         self.burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-        self.burr = self.burr_init.copy()
 
         self._state_label = {
             "empty": 0,
@@ -560,12 +559,12 @@ class DentalEnv3DSTLALL(gym.Env):
         # self._states[self._state_label['adjacent']] = self._adjacent
 
         # burr initialization
+        self.burr_vis = copy.deepcopy(self.burr_vis_init)
         self.burr = self.burr_init.copy()
         position = (self._agent_location - self.dim // 2) * self.resolution
         self.burr.apply_translation(position)
         self.burr_voxel = trimesh.voxel.creation.local_voxelize(self.burr, [0, 0, 0], self.resolution, self.dim // 2)
         self._burr_occupancy = self.burr_voxel.matrix
-        # self._burr_occupancy = np.zeros((self.size, self.size, self.size), dtype=bool)
 
         observation = self._get_obs()
         info = self._get_info()
@@ -601,7 +600,6 @@ class DentalEnv3DSTLALL(gym.Env):
         #     self._burr_occupancy[occupancy_idx[:,0],occupancy_idx[:,1],occupancy_idx[:,2]] = True
 
         # reward
-
         burr_decay_occupancy = self._states[self._state_label['decay'], self._burr_occupancy]
         burr_enamel_occupancy = self._states[self._state_label['enamel'], self._burr_occupancy]
         burr_adjacent_occupancy = self._states[self._state_label['adjacent'], self._burr_occupancy]
@@ -617,9 +615,7 @@ class DentalEnv3DSTLALL(gym.Env):
         self._states[self._state_label['empty'], self._burr_occupancy] = 1
 
         # termination
-        terminated = ~np.any(self._states == self._state_label['decay']) or reward_adjacent_removal > 0 # no more decay
-        # if terminated:
-        #     reward = reward + 50
+        terminated = ~np.any(self._states == self._state_label['decay']) or reward_adjacent_removal > 0  # no more decay
 
         observation = self._get_obs()
         info = self._get_info()
@@ -659,13 +655,13 @@ class DentalEnv3DSTLALL(gym.Env):
 
         if self.window is None and self.render_mode == "open3d":
             self.window = o3d.visualization.Visualizer()
-            self.window.create_window(window_name='Cut Path Episode', width=540, height=540, left=50, top=50, visible=True)
+            self.window.create_window(window_name='Cut Path Episode', width=1080, height=1080, left=50, top=50, visible=True)
             self._states_voxel = self._np_to_voxels(self._states)
-            self.burr_vis = copy.deepcopy(self.burr_vis_init)
-            self._burr_voxel = o3d.geometry.VoxelGrid()
+            self.burr_center = self.burr_vis.get_center()
+            # self._burr_voxel = o3d.geometry.VoxelGrid()
             # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
-            print(self.burr_vis.get_center())
-            self.burr_vis.translate(self.burr_vis.get_center() + self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            # print(self.burr_vis.get_center())
+            self.burr_vis.translate(self.burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self.window.add_geometry(self._states_voxel)
             self.window.add_geometry(self.burr_vis)
             # self.window.add_geometry(self._burr_voxel)
@@ -674,11 +670,9 @@ class DentalEnv3DSTLALL(gym.Env):
         if self.render_mode == "open3d":
             for idx in np.argwhere(self._burr_occupancy):
                 self._states_voxel.remove_voxel(idx)
-            print(self.burr_vis.get_center())
-            self.burr_vis.translate(self.burr_vis.get_center() + self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            self.burr_vis.translate(self.burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self.window.update_geometry(self._states_voxel)
             self.window.update_geometry(self.burr_vis)
-            check = np.sum(self._burr_occupancy)
             # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
             # self.window.update_geometry(self._burr_voxel)
             self.window.poll_events()

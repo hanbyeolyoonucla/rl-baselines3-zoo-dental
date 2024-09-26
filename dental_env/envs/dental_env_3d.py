@@ -498,9 +498,13 @@ class DentalEnv3DSTLALL(gym.Env):
         self.cary_voxel = trimesh.voxel.creation.local_voxelize(cary_mesh, [0, 0, 0], self.resolution, self.dim // 2)
         self.enamel_voxel = trimesh.voxel.creation.local_voxelize(enamel_mesh, [0, 0, 0], self.resolution, self.dim // 2)
 
+        self.ee_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/end_effector_no_bur.stl')
+        self.ee_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+        self.ee_vis_init.scale(scale=1 / self.resolution * 1000, center=[0, 0, 0])
+
         self.burr_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/burr.stl')
         self.burr_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-        self.burr_vis_init.scale(scale=1 / self.resolution,center=[0,0,0])
+        self.burr_vis_init.scale(scale=1 / self.resolution, center=[0, 0, 0])
         self.burr_init = trimesh.load('dental_env/cad/burr.stl')
         self.burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
 
@@ -547,7 +551,7 @@ class DentalEnv3DSTLALL(gym.Env):
 
         # agent initialization
         self._agent_location = np.append(self.np_random.integers(0, self.size, size=2),
-                                         self.size - 31).astype(int)  # start from random
+                                         self.size-1).astype(int)  # start from random
         # state initialization
         self._states = np.zeros((self.channel, self.size, self.size, self.size), dtype=bool)
         self._decay = self.cary_voxel.matrix
@@ -559,6 +563,7 @@ class DentalEnv3DSTLALL(gym.Env):
         # self._states[self._state_label['adjacent']] = self._adjacent
 
         # burr initialization
+        self.ee_vis = copy.deepcopy(self.ee_vis_init)
         self.burr_vis = copy.deepcopy(self.burr_vis_init)
         self.burr = self.burr_init.copy()
         position = (self._agent_location - self.dim // 2) * self.resolution
@@ -658,12 +663,16 @@ class DentalEnv3DSTLALL(gym.Env):
             self.window.create_window(window_name='Cut Path Episode', width=1080, height=1080, left=50, top=50, visible=True)
             self._states_voxel = self._np_to_voxels(self._states)
             self.burr_center = self.burr_vis.get_center()
+            self.ee_center = self.ee_vis.get_center()
             # self._burr_voxel = o3d.geometry.VoxelGrid()
             # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
             # print(self.burr_vis.get_center())
             self.burr_vis.translate(self.burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            self.ee_vis.translate(self.ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self.window.add_geometry(self._states_voxel)
             self.window.add_geometry(self.burr_vis)
+            self.window.add_geometry(self.ee_vis)
+            self.window.add_geometry(self._bounding_box())
             # self.window.add_geometry(self._burr_voxel)
 
 
@@ -671,12 +680,47 @@ class DentalEnv3DSTLALL(gym.Env):
             for idx in np.argwhere(self._burr_occupancy):
                 self._states_voxel.remove_voxel(idx)
             self.burr_vis.translate(self.burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            self.ee_vis.translate(self.ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self.window.update_geometry(self._states_voxel)
             self.window.update_geometry(self.burr_vis)
+            self.window.update_geometry(self.ee_vis)
             # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
             # self.window.update_geometry(self._burr_voxel)
             self.window.poll_events()
             self.window.update_renderer()
+
+    def _bounding_box(self):
+        points = np.array([
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [1, 1, 0],
+            [0, 0, 1],
+            [1, 0, 1],
+            [0, 1, 1],
+            [1, 1, 1],
+        ]) * self.size
+        lines = [
+            [0, 1],
+            [0, 2],
+            [1, 3],
+            [2, 3],
+            [4, 5],
+            [4, 6],
+            [5, 7],
+            [6, 7],
+            [0, 4],
+            [1, 5],
+            [2, 6],
+            [3, 7],
+        ]
+        colors = [[1, 0, 0] for i in range(len(lines))]
+        box = o3d.geometry.LineSet(
+            points=o3d.utility.Vector3dVector(points),
+            lines=o3d.utility.Vector2iVector(lines),
+        )
+        box.colors = o3d.utility.Vector3dVector(colors)
+        return box
 
     def _np_to_voxels(self, state):
         voxel_grid = o3d.geometry.VoxelGrid()

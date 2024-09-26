@@ -29,3 +29,9 @@ register(
      entry_point="dental_env.envs:DentalEnv5D",
      max_episode_steps=300,
 )
+
+register(
+     id="DentalEnv-v0",
+     entry_point="dental_env.envs:DentalEnvBase",
+     max_episode_steps=300,
+)

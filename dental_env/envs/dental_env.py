@@ -22,7 +22,8 @@ class DentalEnvBase(gym.Env):
         # Define settings
         self._ds = down_sample
         self._window_size = 512
-        self._resolution = 0.034 * self._ds
+        self._original_resolution = 0.034  # 34 micron per voxel
+        self._resolution = self._original_resolution * self._ds
 
         # Initialize segmentations
         self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
@@ -38,8 +39,8 @@ class DentalEnvBase(gym.Env):
 
         # Initialize burr
         self._burr_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/burr.stl')
-        self._burr_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-        self._burr_vis_init.scale(scale=1/self._resolution, center=[0, 0, 0])
+        self._burr_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))  # make burr pointing -z
+        self._burr_vis_init.scale(scale=1/self._resolution, center=[0, 0, 0])  # scale burr stl to match with voxel resolution
         self._burr_init = trimesh.load('dental_env/cad/burr.stl')
         self._burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
         # self._ee_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/end_effector_no_bur.stl')
@@ -74,7 +75,7 @@ class DentalEnvBase(gym.Env):
 
     def _get_info(self):
         return {
-            "decay_remained": np.sum(self._states == self._state_label['decay'])
+            "decay_remained": np.sum(self._states[self._state_label['decay']])
         }
 
     def reset(self, seed=None, options=None):

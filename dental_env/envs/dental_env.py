@@ -99,6 +99,7 @@ class DentalEnvBase(gym.Env):
         self._burr.apply_translation(position)
         self._burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution, int(np.max(self._state_init.shape)))
         def crop_center(voxel, cropx, cropy, cropz):
+            # local voxelize function can voxelize burr into cube so we need to crop it for smaller dimension
             x, y, z = voxel.shape
             startx = x // 2 - (cropx // 2)
             starty = y // 2 - (cropy // 2)
@@ -183,6 +184,8 @@ class DentalEnvBase(gym.Env):
             self.window.add_geometry(self._burr_vis)
             # self.window.add_geometry(self.ee_vis)
             self.window.add_geometry(self._bounding_box())
+            frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1/self._resolution)
+            self.window.add_geometry(frame)
             # self.window.add_geometry(self._burr_voxel)
 
 

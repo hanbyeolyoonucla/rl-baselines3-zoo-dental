@@ -34,6 +34,7 @@ class DentalEnvBase(gym.Env):
             "decay": 1,
             "enamel": 2,
             "dentin": 3,
+            "burr": 4,
         }
         self._channel = len(self._state_label)
 
@@ -83,9 +84,9 @@ class DentalEnvBase(gym.Env):
         super().reset(seed=seed)
 
         # agent initialization
-        self._agent_location = np.array([self._state_init.shape[0]//2, self._state_init.shape[1]//2, self._state_init.shape[2]-5]).astype(int)  # start from random
-        # self._agent_location = np.append(self.np_random.integers(low=[0, 0], high=self._state_init.shape[:2]),
-        #                                  self._state_init.shape[2]-20).astype(int)  # start from random
+        # self._agent_location = np.array([self._state_init.shape[0]//2, self._state_init.shape[1]//2, self._state_init.shape[2]-5]).astype(int)  # start from random
+        self._agent_location = np.append(self.np_random.integers(low=[0, 0], high=self._state_init.shape[:2]),
+                                         self._state_init.shape[2]*4/5).astype(int)  # start from random
         # state initialization
         self._states = np.zeros((self._channel, self._state_init.shape[0], self._state_init.shape[1], self._state_init.shape[2]), dtype=bool)
         self._states[self._state_label['empty']] = self._state_init == self._state_label['empty']
@@ -106,6 +107,7 @@ class DentalEnvBase(gym.Env):
             startz = z // 2 - (cropz // 2)
             return voxel[startx:startx + cropx, starty:starty + cropy, startz:startz + cropz]
         self._burr_occupancy = crop_center(self._burr_voxel.matrix, self._state_init.shape[0], self._state_init.shape[1], self._state_init.shape[2])
+        self._states[self._state_label['burr']] = self._burr_occupancy
 
         observation = self._get_obs()
         info = self._get_info()
@@ -149,6 +151,7 @@ class DentalEnvBase(gym.Env):
         self._states[self._state_label['enamel'], self._burr_occupancy] = 0
         self._states[self._state_label['dentin'], self._burr_occupancy] = 0
         self._states[self._state_label['empty'], self._burr_occupancy] = 1
+        self._states[self._state_label['burr']] = self._burr_occupancy
 
         # termination
         terminated = ~np.any(self._states[self._state_label['decay']])  # or reward_dentin_removal > 0  # no more decay

@@ -23,7 +23,7 @@ class DentalEnvBase(gym.Env):
         self._ds = down_sample
         self._window_size = 512
         self._original_resolution = 0.034  # 34 micron per voxel
-        self._resolution = self._original_resolution * self._ds
+        self._resolution = self._original_resolution * self._ds  # resolution of each voxel
 
         # Initialize segmentations
         self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
@@ -40,8 +40,8 @@ class DentalEnvBase(gym.Env):
 
         # Initialize burr
         self._burr_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/burr.stl')
-        self._burr_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))  # make burr pointing -z
-        self._burr_vis_init.scale(scale=1/self._resolution, center=[0, 0, 0])  # scale burr stl to match with voxel resolution
+        self._burr_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))  # burr pointing -z
+        self._burr_vis_init.scale(scale=1/self._resolution, center=[0, 0, 0])  # burr stl to match with voxel resolution
         self._burr_init = trimesh.load('dental_env/cad/burr.stl')
         self._burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
         # self._ee_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/end_effector_no_bur.stl')
@@ -51,8 +51,9 @@ class DentalEnvBase(gym.Env):
         # Define obs and action space
         self.observation_space = spaces.Dict(
             {
-                "agent": spaces.Box(low=np.array([0, 0, 0]), high=np.array(self._state_init.shape)-1, dtype=int),
-                "states": spaces.Box(0, 1, shape=(self._channel, self._state_init.shape[0], self._state_init.shape[1], self._state_init.shape[2]), dtype=bool),
+                "agent": spaces.Box(low=np.array([0, 0, 0]), high=np.array(self._state_init.shape)-1, dtype=np.int32),
+                "states": spaces.Box(0, 1, shape=(self._channel, self._state_init.shape[0], self._state_init.shape[1],
+                                                  self._state_init.shape[2]), dtype=np.int32),
             }
         )
         self.action_space = spaces.Discrete(26)
@@ -84,11 +85,13 @@ class DentalEnvBase(gym.Env):
         super().reset(seed=seed)
 
         # agent initialization
-        # self._agent_location = np.array([self._state_init.shape[0]//2, self._state_init.shape[1]//2, self._state_init.shape[2]-5]).astype(int)  # start from random
-        self._agent_location = np.append(self.np_random.integers(low=[0, 0], high=self._state_init.shape[:2]),
-                                         self._state_init.shape[2]*4/5).astype(int)  # start from random
+        # self._agent_location = np.array([self._state_init.shape[0]//2, self._state_init.shape[1]//2,
+        #                                  self._state_init.shape[2]-5]).astype(int)  # start from random
+        self._agent_location = self.np_random.integers(low=[0, 0, int(self._state_init.shape[2]*4/5)],
+                                                       high=self._state_init.shape, dtype=np.int32)  # start from random
         # state initialization
-        self._states = np.zeros((self._channel, self._state_init.shape[0], self._state_init.shape[1], self._state_init.shape[2]), dtype=bool)
+        self._states = np.zeros((self._channel, self._state_init.shape[0], self._state_init.shape[1],
+                                 self._state_init.shape[2]), dtype=bool)
         self._states[self._state_label['empty']] = self._state_init == self._state_label['empty']
         self._states[self._state_label['decay']] = self._state_init == self._state_label['decay']
         self._states[self._state_label['enamel']] = self._state_init == self._state_label['enamel']
@@ -98,15 +101,10 @@ class DentalEnvBase(gym.Env):
         self._burr = self._burr_init.copy()
         position = (self._agent_location - np.array(self._state_init.shape)//2) * self._resolution
         self._burr.apply_translation(position)
-        self._burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution, int(np.max(self._state_init.shape)))
-        def crop_center(voxel, cropx, cropy, cropz):
-            # local voxelize function can voxelize burr into cube so we need to crop it for smaller dimension
-            x, y, z = voxel.shape
-            startx = x // 2 - (cropx // 2)
-            starty = y // 2 - (cropy // 2)
-            startz = z // 2 - (cropz // 2)
-            return voxel[startx:startx + cropx, starty:starty + cropy, startz:startz + cropz]
-        self._burr_occupancy = crop_center(self._burr_voxel.matrix, self._state_init.shape[0], self._state_init.shape[1], self._state_init.shape[2])
+        self._burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
+                                                                 int(np.max(self._state_init.shape)))
+        self._burr_occupancy = self.crop_center(self._burr_voxel.matrix, self._state_init.shape[0],
+                                                self._state_init.shape[1], self._state_init.shape[2])
         self._states[self._state_label['burr']] = self._burr_occupancy
 
         observation = self._get_obs()
@@ -128,14 +126,10 @@ class DentalEnvBase(gym.Env):
         self._burr = self._burr_init.copy()
         position = (self._agent_location - np.array(self._state_init.shape)//2) * self._resolution
         self._burr.apply_translation(position)
-        self._burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution, int(np.max(self._state_init.shape)))
-        def crop_center(voxel, cropx, cropy, cropz):
-            x, y, z = voxel.shape
-            startx = x // 2 - (cropx // 2)
-            starty = y // 2 - (cropy // 2)
-            startz = z // 2 - (cropz // 2)
-            return voxel[startx:startx + cropx, starty:starty + cropy, startz:startz + cropz]
-        self._burr_occupancy = crop_center(self._burr_voxel.matrix, self._state_init.shape[0], self._state_init.shape[1], self._state_init.shape[2])
+        self._burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
+                                                                 int(np.max(self._state_init.shape)))
+        self._burr_occupancy = self.crop_center(self._burr_voxel.matrix, self._state_init.shape[0],
+                                                self._state_init.shape[1], self._state_init.shape[2])
 
         # reward
         burr_decay_occupancy = self._states[self._state_label['decay'], self._burr_occupancy]
@@ -191,7 +185,6 @@ class DentalEnvBase(gym.Env):
             self.window.add_geometry(frame)
             # self.window.add_geometry(self._burr_voxel)
 
-
         if self.render_mode == "open3d":
             for idx in np.argwhere(self._burr_occupancy):
                 self._states_voxel.remove_voxel(idx)
@@ -204,6 +197,15 @@ class DentalEnvBase(gym.Env):
             # self.window.update_geometry(self._burr_voxel)
             self.window.poll_events()
             self.window.update_renderer()
+
+    @staticmethod
+    def crop_center(voxel, cropx, cropy, cropz):
+        # local voxelize function can voxelize burr into cube, so we need to crop it for smaller dimension
+        x, y, z = voxel.shape
+        startx = x // 2 - (cropx // 2)
+        starty = y // 2 - (cropy // 2)
+        startz = z // 2 - (cropz // 2)
+        return voxel[startx:startx + cropx, starty:starty + cropy, startz:startz + cropz]
 
     def _bounding_box(self):
         x, y, z = self._state_init.shape

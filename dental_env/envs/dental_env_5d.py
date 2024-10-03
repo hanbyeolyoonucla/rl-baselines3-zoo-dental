@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger("trimesh")
 logger.setLevel(logging.ERROR)
 
-class DentalEnv5D(gym.Env):
+class DentalEnv5DOld(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array", "mesh"], "render_fps": 4}
 
     def __init__(self, render_mode=None, size=11):

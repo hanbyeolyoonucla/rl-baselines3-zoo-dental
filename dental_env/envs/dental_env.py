@@ -1,13 +1,16 @@
+
+import copy
+import logging
+
+import numpy as np
+import trimesh
+import open3d as o3d
+import nibabel as nib
+from spatialmath import SO3, SE3
+from scipy.ndimage import affine_transform
+
 import gymnasium as gym
 from gymnasium import spaces
-import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import trimesh
-import logging
-import open3d as o3d
-import copy
-import nibabel as nib
 
 logger = logging.getLogger("trimesh")
 logger.setLevel(logging.ERROR)
@@ -27,8 +30,15 @@ class DentalEnvBase(gym.Env):
 
         # Initialize segmentations
         self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
+        # data specific alignment
+        shape = self._state_init.shape
+        center = np.array(shape) / 2
+        transform = SE3.Trans(center[::-1])*SE3.Rt(SO3.RPY(0, -np.pi/2, 0), [0, 0, 0])*SE3.Trans(-center)
+        transform = transform.inv()
+        self._state_init = affine_transform(self._state_init, transform.A, order=0,
+                                            output_shape=(shape[2], shape[1], shape[0]))
         self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
-        self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))  # data specific
+        # self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
         self._state_label = {
             "empty": 0,
             "decay": 1,
@@ -44,9 +54,10 @@ class DentalEnvBase(gym.Env):
         self._burr_vis_init.scale(scale=1/self._resolution, center=[0, 0, 0])  # burr stl to match with voxel resolution
         self._burr_init = trimesh.load('dental_env/cad/burr.stl')
         self._burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-        # self._ee_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/end_effector_no_bur.stl')
-        # self._ee_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
-        # self._ee_vis_init.scale(scale=1 / self._resolution * 1000, center=[0, 0, 0])
+        self._ee_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/hand_piece_no_bur.stl')
+        self._ee_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+        self._ee_vis_init.translate((0, 0, 10))  # translate by burr length 10 mm
+        self._ee_vis_init.scale(scale=1 / self._resolution, center=[0, 0, 0])
 
         # Define obs and action space
         self.observation_space = spaces.Dict(
@@ -91,7 +102,7 @@ class DentalEnvBase(gym.Env):
                                                        high=self._state_init.shape, dtype=np.int32)  # start from random
         # state initialization
         self._states = np.zeros((self._channel, self._state_init.shape[0], self._state_init.shape[1],
-                                 self._state_init.shape[2]), dtype=bool)
+                                 self._state_init.shape[2]), dtype=np.int32)
         self._states[self._state_label['empty']] = self._state_init == self._state_label['empty']
         self._states[self._state_label['decay']] = self._state_init == self._state_label['decay']
         self._states[self._state_label['enamel']] = self._state_init == self._state_label['enamel']
@@ -168,31 +179,33 @@ class DentalEnvBase(gym.Env):
             self.window = o3d.visualization.Visualizer()
             self.window.create_window(window_name='Cut Path Episode', width=1080, height=1080, left=50, top=50, visible=True)
             self._states_voxel = self._np_to_voxels(self._states)
-            # self._ee_vis = copy.deepcopy(self._ee_vis_init)
+            self._ee_vis = copy.deepcopy(self._ee_vis_init)
             self._burr_vis = copy.deepcopy(self._burr_vis_init)
             self._burr_center = self._burr_vis.get_center()
-            # self._ee_center = self._ee_vis.get_center()
+            self._ee_center = self._ee_vis.get_center()
             # self._burr_voxel = o3d.geometry.VoxelGrid()
             # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
             # print(self.burr_vis.get_center())
             self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
-            # self.ee_vis.translate(self.ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            self._ee_vis.translate(self._ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self.window.add_geometry(self._states_voxel)
             self.window.add_geometry(self._burr_vis)
-            # self.window.add_geometry(self.ee_vis)
+            self.window.add_geometry(self._ee_vis)
             self.window.add_geometry(self._bounding_box())
             frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1/self._resolution)
             self.window.add_geometry(frame)
             # self.window.add_geometry(self._burr_voxel)
+            ctr = self.window.get_view_control()
+            ctr.rotate(0, -200)
 
         if self.render_mode == "open3d":
             for idx in np.argwhere(self._burr_occupancy):
                 self._states_voxel.remove_voxel(idx)
             self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
-            # self.ee_vis.translate(self.ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            self._ee_vis.translate(self._ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self.window.update_geometry(self._states_voxel)
             self.window.update_geometry(self._burr_vis)
-            # self.window.update_geometry(self.ee_vis)
+            self.window.update_geometry(self._ee_vis)
             # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
             # self.window.update_geometry(self._burr_voxel)
             self.window.poll_events()
@@ -279,3 +292,8 @@ class DentalEnvBase(gym.Env):
         if self.window is not None and self.render_mode == "open3d":
             self.window.close()
             self.window = None
+
+
+class DentalEnv5D(DentalEnvBase):
+    def __int__(self):
+        super().__init__(render_mode=None, down_sample=5)

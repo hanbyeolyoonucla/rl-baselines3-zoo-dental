@@ -105,7 +105,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         return th.cat(encoded_tensor_list, dim=1)
 
 hyperparams = {
-    "DentalEnv3D-v0": dict(
+    "DentalEnv-v0": dict(
         # env_wrapper=[{"gymnasium.wrappers.TimeLimit": {"max_episode_steps": 100}}],
         # normalize=True,
         n_envs=1,

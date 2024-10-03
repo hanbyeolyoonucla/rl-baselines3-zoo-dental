@@ -27,19 +27,27 @@ def np_to_voxels(dict, arr):
 img = nib.load('dental_env/labels/tooth_2.nii.gz')
 nparr = img.get_fdata()
 nparr = nparr[::5,::5,::5]
-# nparr = np.rot90(nparr, k=1, axes=(0, 2))
-center = np.array(nparr.shape) / 2
+
+input_shape = nparr.shape
+output_shape = (input_shape[2], input_shape[1], input_shape[0])
+input_center = np.array(input_shape) / 2
+output_center = np.array(output_shape) / 2
+
+transform = SE3.Trans(output_center) * SE3.Rt(SO3.RPY([0,-90,-20], unit="deg"), [0, 0, 0]) * SE3.Trans(-input_center)
+transform = transform.inv()
+nparr_transformed = affine_transform(nparr, transform.A, order=0, output_shape=output_shape)
+nparr = np.rot90(nparr, k=1, axes=(0, 2))
+err = np.linalg.norm(nparr_transformed - nparr)
+print(err)
 state = {
             "empty": 0,
             "decay": 1,
             "enamel": 2,
             "dentin": 3,
         }
-transform = SE3.Trans(center) * SE3.Rt(SO3.Rz(0, "deg"), [0, 0, 0]) * SE3.Trans(-center)
-nparr_transformed = affine_transform(nparr, transform.A, order=0)
 
 states_voxel = np_to_voxels(state, nparr)
 states_voxel_transformed = np_to_voxels(state, nparr_transformed)
 
 frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=10)
-o3d.visualization.draw_geometries([states_voxel, states_voxel_transformed, frame])
+o3d.visualization.draw_geometries([states_voxel_transformed, frame])

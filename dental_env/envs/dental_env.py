@@ -18,9 +18,9 @@ logger.setLevel(logging.ERROR)
 
 class DentalEnvBase(gym.Env):
 
-    metadata = {"render_modes": ["open3d", "rgb_array"], "render_fps": 4}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, down_sample=5):
+    def __init__(self, render_mode=None, down_sample=10):
 
         # Define settings
         self._ds = down_sample
@@ -88,7 +88,8 @@ class DentalEnvBase(gym.Env):
 
     def _get_info(self):
         return {
-            "decay_remained": np.sum(self._states[self._state_label['decay']])
+            "decay_remained": np.sum(self._states[self._state_label['decay']]),
+            "is_success": np.sum(self._states[self._state_label['decay']]) == 0
         }
 
     def reset(self, seed=None, options=None):
@@ -121,7 +122,7 @@ class DentalEnvBase(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        if self.render_mode == "open3d":
+        if self.render_mode == "human":
             self._render_frame()
 
         return observation, info
@@ -149,7 +150,7 @@ class DentalEnvBase(gym.Env):
         reward_decay_removal = np.sum(burr_decay_occupancy)
         reward_enamel_removal = np.sum(burr_enamel_occupancy)
         reward_dentin_removal = np.sum(burr_dentin_occupancy)
-        reward = 30 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_dentin_removal - 1
+        reward = 100 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_dentin_removal
 
         # state
         self._states[self._state_label['decay'], self._burr_occupancy] = 0
@@ -164,7 +165,7 @@ class DentalEnvBase(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
-        if self.render_mode == "open3d":
+        if self.render_mode == "human":
             self._render_frame()
 
         return observation, reward, terminated, False, info
@@ -175,7 +176,7 @@ class DentalEnvBase(gym.Env):
 
     def _render_frame(self):
 
-        if self.window is None and self.render_mode == "open3d":
+        if self.window is None and self.render_mode == "human":
             self.window = o3d.visualization.Visualizer()
             self.window.create_window(window_name='Cut Path Episode', width=1080, height=1080, left=50, top=50, visible=True)
             self._states_voxel = self._np_to_voxels(self._states)
@@ -198,7 +199,7 @@ class DentalEnvBase(gym.Env):
             ctr = self.window.get_view_control()
             ctr.rotate(0, -200)
 
-        if self.render_mode == "open3d":
+        if self.render_mode == "human":
             for idx in np.argwhere(self._burr_occupancy):
                 self._states_voxel.remove_voxel(idx)
             self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
@@ -289,11 +290,11 @@ class DentalEnvBase(gym.Env):
         # return voxel_grid
 
     def close(self):
-        if self.window is not None and self.render_mode == "open3d":
+        if self.window is not None and self.render_mode == "human":
             self.window.close()
             self.window = None
 
 
 class DentalEnv5D(DentalEnvBase):
     def __int__(self):
-        super().__init__(render_mode=None, down_sample=5)
+        super().__init__(render_mode=None, down_sample=10)

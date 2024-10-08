@@ -5,7 +5,7 @@ from stable_baselines3 import PPO
 from hyperparams.python.ppo_config import CustomCombinedExtractor
 
 # env = gym.make("DentalEnv3D-v2", render_mode="open3d", size=101, max_episode_steps=50)
-env = gym.make("DentalEnv-v0", render_mode="open3d", down_sample=10, max_episode_steps=50)
+env = gym.make("DentalEnv-v0", max_episode_steps=50)
 
 # policy_kwargs = dict(
 #             features_extractor_class=CustomCombinedExtractor,
@@ -13,6 +13,7 @@ env = gym.make("DentalEnv-v0", render_mode="open3d", down_sample=10, max_episode
 #             normalize_images=False
 #         )
 # model = PPO("MultiInputPolicy", env, policy_kwargs=policy_kwargs)
+# model.load(
 # model.learn(total_timesteps=10)
 
 observation, info = env.reset(seed=42)

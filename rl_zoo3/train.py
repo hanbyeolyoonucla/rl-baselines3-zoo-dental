@@ -206,6 +206,7 @@ def train() -> None:
 
         run_name = f"{args.env}__{args.algo}__{args.seed}__{int(time.time())}"
         tags = [*args.wandb_tags, f"v{sb3.__version__}"]
+        args.tensorboard_log = f"runs/{run_name}"
         run = wandb.init(
             name=run_name,
             project=args.wandb_project_name,
@@ -216,7 +217,6 @@ def train() -> None:
             monitor_gym=True,  # auto-upload the videos of agents playing the game
             save_code=True,  # optional
         )
-        args.tensorboard_log = f"runs/{run_name}"
 
     exp_manager = ExperimentManager(
         args,

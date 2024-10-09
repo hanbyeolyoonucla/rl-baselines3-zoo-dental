@@ -128,8 +128,5 @@ hyperparams = {
             features_extractor_kwargs=dict(cnn_output_dim=256),
             normalize_images=False
         ),
-        callback=dict(
-            WandbCallback=dict()
-        )
     )
 }

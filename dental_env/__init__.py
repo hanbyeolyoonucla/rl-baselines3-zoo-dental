@@ -26,12 +26,18 @@ register(
 
 register(
      id="DentalEnv5D-v0",
-     entry_point="dental_env.envs:DentalEnv5D",
+     entry_point="dental_env.envs:DentalEnv5DOld",
      max_episode_steps=300,
 )
 
 register(
      id="DentalEnv-v0",
      entry_point="dental_env.envs:DentalEnvBase",
+     max_episode_steps=256,
+)
+
+register(
+     id="DentalEnv5D-v1",
+     entry_point="dental_env.envs:DentalEnv5D",
      max_episode_steps=256,
 )

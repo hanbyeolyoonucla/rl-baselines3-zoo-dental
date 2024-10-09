@@ -108,7 +108,7 @@ hyperparams = {
     "DentalEnv-v0": dict(
         # env_wrapper=[{"gymnasium.wrappers.TimeLimit": {"max_episode_steps": 100}}],
         # normalize=True,
-        n_envs=8,
+        n_envs=4,
         n_timesteps=20000,
         policy="MultiInputPolicy",
         batch_size=64,
@@ -126,6 +126,7 @@ hyperparams = {
             activation_fn=nn.ReLU,
             features_extractor_class=CustomCombinedExtractor,
             features_extractor_kwargs=dict(cnn_output_dim=256),
+            net_arch=dict(pi=[64,64], vf=[64,64]),
             normalize_images=False
         ),
     )

@@ -30,15 +30,16 @@ class DentalEnvBase(gym.Env):
 
         # Initialize segmentations
         self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
-        # data specific alignment
-        shape = self._state_init.shape
-        center = np.array(shape) / 2
-        transform = SE3.Trans(center[::-1])*SE3.Rt(SO3.RPY(0, -np.pi/2, 0), [0, 0, 0])*SE3.Trans(-center)
-        transform = transform.inv()
-        self._state_init = affine_transform(self._state_init, transform.A, order=0,
-                                            output_shape=(shape[2], shape[1], shape[0]))
+        # data specific alignment - using affine transform
+        # shape = self._state_init.shape
+        # center = np.array(shape) / 2
+        # transform = SE3.Trans(center[::-1])*SE3.Rt(SO3.RPY(0, -np.pi/2, 0), [0, 0, 0])*SE3.Trans(-center)
+        # transform = transform.inv()
+        # self._state_init = affine_transform(self._state_init, transform.A, order=0,
+        #                                     output_shape=(shape[2], shape[1], shape[0]))
         self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
-        # self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
+        # data specific alignment - using simple numpy rot90
+        self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
         self._state_label = {
             "empty": 0,
             "decay": 1,
@@ -150,7 +151,7 @@ class DentalEnvBase(gym.Env):
         reward_decay_removal = np.sum(burr_decay_occupancy)
         reward_enamel_removal = np.sum(burr_enamel_occupancy)
         reward_dentin_removal = np.sum(burr_dentin_occupancy)
-        reward = 100 * reward_decay_removal - 3 * reward_enamel_removal - 10 * reward_dentin_removal
+        reward = 1000 * reward_decay_removal - 10 * reward_enamel_removal - 100 * reward_dentin_removal - 1
 
         # state
         self._states[self._state_label['decay'], self._burr_occupancy] = 0
@@ -296,5 +297,29 @@ class DentalEnvBase(gym.Env):
 
 
 class DentalEnv5D(DentalEnvBase):
-    def __int__(self):
-        super().__init__(render_mode=None, down_sample=10)
+    def __int__(self, render_mode=None, down_sample=10):
+        super().__init__(render_mode=render_mode, down_sample=down_sample)
+
+        # Define obs and action space
+        self.observation_space = spaces.Dict(
+            {
+                "agent": spaces.Box(low=np.array([0, 0, 0]), high=np.array(self._state_init.shape) - 1, dtype=np.int32),
+                "states": spaces.Box(0, 1, shape=(self._channel, self._state_init.shape[0], self._state_init.shape[1],
+                                                  self._state_init.shape[2]), dtype=np.int32),
+            }
+        )
+        self.action_space = spaces.Discrete(26)
+        self._action_to_direction = {
+            0: np.array([1, 0, 0]), 1: np.array([1, 1, 0]), 2: np.array([0, 1, 0]), 3: np.array([-1, 1, 0]),
+            4: np.array([-1, 0, 0]), 5: np.array([-1, -1, 0]), 6: np.array([0, -1, 0]), 7: np.array([1, -1, 0]),
+            8: np.array([1, 0, 1]), 9: np.array([1, 1, 1]), 10: np.array([0, 1, 1]), 11: np.array([-1, 1, 1]),
+            12: np.array([-1, 0, 1]), 13: np.array([-1, -1, 1]), 14: np.array([0, -1, 1]), 15: np.array([1, -1, 1]),
+            16: np.array([1, 0, -1]), 17: np.array([1, 1, -1]), 18: np.array([0, 1, -1]), 19: np.array([-1, 1, -1]),
+            20: np.array([-1, 0, -1]), 21: np.array([-1, -1, -1]), 22: np.array([0, -1, -1]), 23: np.array([1, -1, -1]),
+            24: np.array([0, 0, 1]), 25: np.array([0, 0, -1])
+        }
+
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
+        self.window = None
+        self.clock = None

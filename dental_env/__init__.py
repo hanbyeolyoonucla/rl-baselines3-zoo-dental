@@ -33,5 +33,5 @@ register(
 register(
      id="DentalEnv-v0",
      entry_point="dental_env.envs:DentalEnvBase",
-     max_episode_steps=300,
+     max_episode_steps=256,
 )

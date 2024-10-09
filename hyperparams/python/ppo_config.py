@@ -7,7 +7,7 @@ from gymnasium import spaces
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor, FlattenExtractor
 from stable_baselines3.common.preprocessing import get_flattened_obs_dim
 from stable_baselines3.common.type_aliases import TensorDict
-
+from wandb.integration.sb3 import WandbCallback
 
 class CustomCNN3D(BaseFeaturesExtractor):
     """
@@ -112,7 +112,7 @@ hyperparams = {
         n_timesteps=20000,
         policy="MultiInputPolicy",
         batch_size=64,
-        n_steps=256,
+        n_steps=1024,
         gamma=0.95,
         learning_rate=0.0003,
         ent_coef=0.0,
@@ -128,5 +128,8 @@ hyperparams = {
             features_extractor_kwargs=dict(cnn_output_dim=256),
             normalize_images=False
         ),
+        callback=dict(
+            WandbCallback=dict()
+        )
     )
 }

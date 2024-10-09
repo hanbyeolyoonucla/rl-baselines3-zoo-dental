@@ -121,6 +121,7 @@ CartPole-v1:
   ent_coef: 0.0
   learning_rate: lin_0.001
   clip_range: lin_0.2
+  callback: {'wandb.integration.sb3.WandbCallback': {'model_save_path': 'runs/cartpole'}}
 
 MountainCar-v0:
   normalize: true

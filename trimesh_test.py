@@ -100,12 +100,17 @@ size = dim+1
 
 
 # occ = local_burr_voxel.matrix & local_cary_voxel.matrix
-o3d.visualization.draw_geometries([burr_occ_voxel, burr_mesh])
+# o3d.visualization.draw_geometries([burr_occ_voxel, burr_mesh])
 
 burr_mesh.translate(init_center+np.array([0,0,1]), relative=False)
 print(burr_mesh.get_center())
-o3d.visualization.draw_geometries([burr_occ_voxel, burr_mesh])
+# o3d.visualization.draw_geometries([burr_occ_voxel, burr_mesh])
 
 burr_mesh.translate(init_center+np.array([0,0,1]), relative=False)
 print(burr_mesh.get_center())
-o3d.visualization.draw_geometries([burr_occ_voxel, burr_mesh])
+# o3d.visualization.draw_geometries([burr_occ_voxel, burr_mesh])
+
+
+
+agent_rotation = np.array([1, 1, 0, 0], dtype=np.float64)
+print(trimesh.transformations.quaternion_matrix(agent_rotation))

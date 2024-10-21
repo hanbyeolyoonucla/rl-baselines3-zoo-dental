@@ -113,9 +113,9 @@ class DentalEnv5D(gym.Env):
         position = (self._agent_location - np.array(self._state_init.shape)//2) * self._resolution
         self._burr.apply_transform(trimesh.transformations.quaternion_matrix(self._agent_rotation))
         self._burr.apply_translation(position)
-        self._burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
-                                                                 int(np.max(self._state_init.shape)))
-        self._burr_occupancy = self.crop_center(self._burr_voxel.matrix, self._state_init.shape[0],
+        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
+                                                           int(np.max(self._state_init.shape)))
+        self._burr_occupancy = self.crop_center(burr_voxel.matrix, self._state_init.shape[0],
                                                 self._state_init.shape[1], self._state_init.shape[2])
         self._states[self._state_label['burr']] = self._burr_occupancy
         self._states[self._state_label['empty']] = (self._states[self._state_label['empty']] &
@@ -137,16 +137,16 @@ class DentalEnv5D(gym.Env):
         self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
                                           (np.array(self._state_init.shape)//2)
         self._agent_rotation = (UnitQuaternion(self._agent_rotation)
-                                * UnitQuaternion(SO3.RPY(0, action[3], action[4], unit='deg'))).A
+                                * UnitQuaternion(SO3.RPY(10*action[3], 10*action[4], 0, unit='deg'))).A
 
         # burr pose update
         self._burr = self._burr_init.copy()
         position = (self._agent_location - np.array(self._state_init.shape)//2) * self._resolution
         self._burr.apply_transform(trimesh.transformations.quaternion_matrix(self._agent_rotation))
         self._burr.apply_translation(position)
-        self._burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
-                                                                 int(np.max(self._state_init.shape)))
-        self._burr_occupancy = self.crop_center(self._burr_voxel.matrix, self._state_init.shape[0],
+        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
+                                                           int(np.max(self._state_init.shape)))
+        self._burr_occupancy = self.crop_center(burr_voxel.matrix, self._state_init.shape[0],
                                                 self._state_init.shape[1], self._state_init.shape[2])
 
         # reward
@@ -186,44 +186,61 @@ class DentalEnv5D(gym.Env):
     def _render_frame(self):
 
         if self.window is None and self.render_mode == "human":
+
             self.window = o3d.visualization.Visualizer()
             self.window.create_window(window_name='Cut Path Episode', width=1080, height=1080, left=50, top=50, visible=True)
-            self._states_voxel = self._np_to_voxels(self._states)
+
+            self._states_voxel = o3d.geometry.VoxelGrid()
+            self._burr_voxel = o3d.geometry.VoxelGrid()
+            self._states_voxel.voxel_size = 1
+            self._burr_voxel.voxel_size = 1
+            self._initialize_state_voxels()
+            self._update_burr_voxels()
+
             self._ee_vis = copy.deepcopy(self._ee_vis_init)
             self._burr_vis = copy.deepcopy(self._burr_vis_init)
             self._burr_center = self._burr_vis.get_center()
             self._ee_center = self._ee_vis.get_center()
-            # self._burr_voxel = o3d.geometry.VoxelGrid()
-            # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
-            # print(self.burr_vis.get_center())
+
             self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation))
             self._ee_vis.translate(self._ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation))
+
             self.window.add_geometry(self._states_voxel)
+            self.window.add_geometry(self._burr_voxel)
             self.window.add_geometry(self._burr_vis)
             # self.window.add_geometry(self._ee_vis)
+
+            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose())
+            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose())
+
             self.window.add_geometry(self._bounding_box())
             frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1/self._resolution)
             self.window.add_geometry(frame)
-            # self.window.add_geometry(self._burr_voxel)
+
             ctr = self.window.get_view_control()
             ctr.rotate(0, -200)
 
         if self.render_mode == "human":
+
             for idx in np.argwhere(self._burr_occupancy):
                 self._states_voxel.remove_voxel(idx)
-            # self._ee_vis = copy.deepcopy(self._ee_vis_init)
-            # self._burr_vis = copy.deepcopy(self._burr_vis_init)
+            self._update_burr_voxels()
+
             self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation))
             self._ee_vis.translate(self._ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
             self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation))
+
             self.window.update_geometry(self._states_voxel)
+            self.window.update_geometry(self._burr_voxel)
             self.window.update_geometry(self._burr_vis)
             # self.window.update_geometry(self._ee_vis)
-            # self._np_to_burr_voxels(self._burr_occupancy, self._burr_voxel)
-            # self.window.update_geometry(self._burr_voxel)
+
+            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose())
+            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose())
+
             self.window.poll_events()
             self.window.update_renderer()
 
@@ -270,41 +287,36 @@ class DentalEnv5D(gym.Env):
         box.colors = o3d.utility.Vector3dVector(colors)
         return box
 
-    def _np_to_voxels(self, state):
-        voxel_grid = o3d.geometry.VoxelGrid()
-        voxel_grid.voxel_size = 1
-        for z in range(state.shape[3]):
-            for y in range(state.shape[2]):
-                for x in range(state.shape[1]):
-                    if state[self._state_label['empty'],x,y,z] == 1:
+    def _initialize_state_voxels(self):
+        for z in range(self._states.shape[3]):
+            for y in range(self._states.shape[2]):
+                for x in range(self._states.shape[1]):
+                    if self._states[self._state_label['empty'],x,y,z] == 1:
                         continue
                     voxel = o3d.geometry.Voxel()
-                    if state[self._state_label['decay'],x,y,z] == 1:
+                    if self._states[self._state_label['decay'],x,y,z] == 1:
                         voxel.color = np.array([1, 0, 0])
-                    elif state[self._state_label['enamel'],x,y,z] == 1:
+                    elif self._states[self._state_label['enamel'],x,y,z] == 1:
                         voxel.color = np.array([0, 1, 0])
-                    elif state[self._state_label['dentin'],x,y,z] == 1:
+                    elif self._states[self._state_label['dentin'],x,y,z] == 1:
                         voxel.color = np.array([1, 0.7, 0])
                     # elif state[self._state_label['burr'],x,y,z] == 1:  # not updating i.e. this function called once
                     #     voxel.color = np.array([0, 0, 1])
                     voxel.grid_index = np.array([x,y,z])
-                    voxel_grid.add_voxel(voxel)
-        return voxel_grid
+                    self._states_voxel.add_voxel(voxel)
 
-    def _np_to_burr_voxels(self, burr, voxel_grid):
-        # voxel_grid = o3d.geometry.VoxelGrid()
-        # voxel_grid.clear()
-        voxel_grid.voxel_size = 1
-        for z in range(burr.shape[2]):
-            for y in range(burr.shape[1]):
-                for x in range(burr.shape[0]):
-                    if burr[x, y, z] == 0:
+    def _update_burr_voxels(self):
+        self._burr_voxel.clear()
+        self._burr_voxel.voxel_size = 1
+        for z in range(self._burr_occupancy.shape[2]):
+            for y in range(self._burr_occupancy.shape[1]):
+                for x in range(self._burr_occupancy.shape[0]):
+                    if self._burr_occupancy[x, y, z] == 0:
                         continue
                     voxel = o3d.geometry.Voxel()
                     voxel.color = np.array([0, 0, 1])
                     voxel.grid_index = np.array([x, y, z])
-                    voxel_grid.add_voxel(voxel)
-        # return voxel_grid
+                    self._burr_voxel.add_voxel(voxel)
 
     def close(self):
         if self.window is not None and self.render_mode == "human":

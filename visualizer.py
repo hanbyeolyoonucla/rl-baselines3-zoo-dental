@@ -4,7 +4,8 @@ import torch
 from stable_baselines3 import PPO
 from hyperparams.python.ppo_config import CustomCombinedExtractor
 
-env = gym.make("DentalEnv5D-v1", render_mode="human", max_episode_steps=1024, down_sample=50)
+# env = gym.make("DentalEnv-v0", render_mode="human", max_episode_steps=1024, down_sample=10)
+env = gym.make("DentalEnv5D-v1", render_mode="human", max_episode_steps=1024, down_sample=10)
 
 # policy_kwargs = dict(
 #             features_extractor_class=CustomCombinedExtractor,
@@ -20,7 +21,9 @@ observation, info = env.reset(seed=42)
 for _ in range(1000):
     action = env.action_space.sample()
     # action, _ = model.predict(observation)
-    _, reward, terminated, truncated, _ = env.step(action)
+    state, reward, terminated, truncated, _ = env.step(action)
+    # print(state['agent_pos'])
+    # print(state['agent_rot'])
     print(reward)
     if terminated or truncated:
         env.close()

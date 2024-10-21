@@ -61,26 +61,15 @@ class DentalEnvBase(gym.Env):
         self._ee_vis_init.scale(scale=1 / self._resolution, center=[0, 0, 0])
 
         # Define obs and action space
-        # TODO: agent position in tooth base reference frame ranging from -1 to 1
-        # TODO: change states representation from box to multibinary
         self.observation_space = spaces.Dict(
             {
-                "agent": spaces.Box(low=np.array([0, 0, 0]), high=np.array(self._state_init.shape)-1, dtype=np.int32),
-                "states": spaces.Box(0, 1, shape=(self._channel, self._state_init.shape[0], self._state_init.shape[1],
-                                                  self._state_init.shape[2]), dtype=np.int32),
+                "agent": spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float64),
+                "states": spaces.MultiBinary([self._channel, self._state_init.shape[0], self._state_init.shape[1],
+                                              self._state_init.shape[2]]),
             }
         )
-        # TODO: change action representation from Discrete to Box(-1, 1, shape=(3,), dtype=np.int32)
-        self.action_space = spaces.Discrete(26)
-        self._action_to_direction = {
-            0: np.array([1, 0, 0]), 1: np.array([1, 1, 0]), 2: np.array([0, 1, 0]), 3: np.array([-1, 1, 0]),
-            4: np.array([-1, 0, 0]), 5: np.array([-1, -1, 0]), 6: np.array([0, -1, 0]), 7: np.array([1, -1, 0]),
-            8: np.array([1, 0, 1]), 9: np.array([1, 1, 1]), 10: np.array([0, 1, 1]), 11: np.array([-1, 1, 1]),
-            12: np.array([-1, 0, 1]), 13: np.array([-1, -1, 1]), 14: np.array([0, -1, 1]), 15: np.array([1, -1, 1]),
-            16: np.array([1, 0, -1]), 17: np.array([1, 1, -1]), 18: np.array([0, 1, -1]), 19: np.array([-1, 1, -1]),
-            20: np.array([-1, 0, -1]), 21: np.array([-1, -1, -1]), 22: np.array([0, -1, -1]), 23: np.array([1, -1, -1]),
-            24: np.array([0, 0, 1]), 25: np.array([0, 0, -1])
-        }
+
+        self.action_space = spaces.Box(low=-1, high=1, shape=(3,), dtype=np.int32)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -88,7 +77,7 @@ class DentalEnvBase(gym.Env):
         self.clock = None
 
     def _get_obs(self):
-        return {"agent": self._agent_location, "states": self._states}
+        return {"agent": self._agent_location_normalized, "states": self._states}
 
     def _get_info(self):
         return {
@@ -105,9 +94,11 @@ class DentalEnvBase(gym.Env):
         #                                  self._state_init.shape[2]-5]).astype(int)  # start from random
         self._agent_location = self.np_random.integers(low=[0, 0, int(self._state_init.shape[2]*4/5)],
                                                        high=self._state_init.shape, dtype=np.int32)  # start from random
+        self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
+                                          (np.array(self._state_init.shape)//2)
         # state initialization
         self._states = np.zeros((self._channel, self._state_init.shape[0], self._state_init.shape[1],
-                                 self._state_init.shape[2]), dtype=np.int32)
+                                 self._state_init.shape[2]), dtype=np.bool_)
         self._states[self._state_label['empty']] = self._state_init == self._state_label['empty']
         self._states[self._state_label['decay']] = self._state_init == self._state_label['decay']
         self._states[self._state_label['enamel']] = self._state_init == self._state_label['enamel']
@@ -133,10 +124,11 @@ class DentalEnvBase(gym.Env):
 
     def step(self, action):
         # action
-        direction = self._action_to_direction[action]
         self._agent_location = np.clip(
-            self._agent_location + direction, a_min=0, a_max=self._state_init.shape
+            self._agent_location + action, a_min=0, a_max=self._state_init.shape
         )
+        self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
+                                          (np.array(self._state_init.shape)//2)
 
         # burr pose update
         self._burr = self._burr_init.copy()
@@ -300,21 +292,67 @@ class DentalEnvBase(gym.Env):
 
 
 class DentalEnv5D(DentalEnvBase):
-    def __int__(self, render_mode=None, down_sample=10):
-        super().__init__(render_mode=render_mode, down_sample=down_sample)
+
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+
+    def __init__(self, render_mode=None, down_sample=10):
+
+        # Define settings
+        self._ds = down_sample
+        self._window_size = 512
+        self._original_resolution = 0.034  # 34 micron per voxel
+        self._resolution = self._original_resolution * self._ds  # resolution of each voxel
+
+        # Initialize segmentations
+        self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
+        # data specific alignment - using affine transform
+        # shape = self._state_init.shape
+        # center = np.array(shape) / 2
+        # transform = SE3.Trans(center[::-1])*SE3.Rt(SO3.RPY(0, -np.pi/2, 0), [0, 0, 0])*SE3.Trans(-center)
+        # transform = transform.inv()
+        # self._state_init = affine_transform(self._state_init, transform.A, order=0,
+        #                                     output_shape=(shape[2], shape[1], shape[0]))
+        self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
+        # data specific alignment - using simple numpy rot90
+        self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
+        self._state_label = {
+            "empty": 0,
+            "decay": 1,
+            "enamel": 2,
+            "dentin": 3,
+            "burr": 4,
+        }
+        self._channel = len(self._state_label)
+
+        # Initialize burr
+        self._burr_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/burr.stl')
+        self._burr_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))  # burr pointing -z
+        self._burr_vis_init.scale(scale=1 / self._resolution,
+                                  center=[0, 0, 0])  # burr stl to match with voxel resolution
+        self._burr_init = trimesh.load('dental_env/cad/burr.stl')
+        self._burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+        self._ee_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/hand_piece_no_bur.stl')
+        self._ee_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+        self._ee_vis_init.translate((0, 0, 10))  # translate by burr length 10 mm
+        self._ee_vis_init.scale(scale=1 / self._resolution, center=[0, 0, 0])
 
         # Define obs and action space
         self.observation_space = spaces.Dict(
             {
-                "agent_pos": spaces.Box(low=np.array([0, 0, 0]),
-                                        high=np.array(self._state_init.shape) - 1, dtype=np.int32),
+                "agent_pos": spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float64),
                 "agent_rot": spaces.Box(low=np.array([-1, -1, -1, -1]),
-                                        high=np.array([1, 1, 1, 1]), dtype=np.float32),
+                                        high=np.array([1, 1, 1, 1]), dtype=np.float64),
                 "states": spaces.MultiBinary([self._channel, self._state_init.shape[0], self._state_init.shape[1],
-                                              self._state_init.shape[2]])
+                                              self._state_init.shape[2]]),
             }
         )
+
         self.action_space = spaces.Box(low=-1, high=1, shape=(5,), dtype=np.int32)
+
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
+        self.window = None
+        self.clock = None
 
     def _get_obs(self):
         return {"agent_pos": self._agent_location, "agent_rot": self._agent_rotation, "states": self._states}
@@ -358,7 +396,7 @@ class DentalEnv5D(DentalEnvBase):
         self._agent_location = np.clip(
             self._agent_location + action[:3], a_min=0, a_max=self._state_init.shape
         )
-        self._agent_rotation = (UnitQuaternion(self._agent_location)
+        self._agent_rotation = (UnitQuaternion(self._agent_rotation)
                                 * UnitQuaternion(SO3.RPY(0, action[3], action[4]))).A
 
         # burr pose update

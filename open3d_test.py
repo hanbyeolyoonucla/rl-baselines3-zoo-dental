@@ -31,6 +31,7 @@ def crop_center(voxel, cropx, cropy, cropz):
 cary_mesh = o3d.io.read_triangle_mesh('dental_env/cad/cary.stl')
 enamel_mesh = o3d.io.read_triangle_mesh('dental_env/cad/enamel.stl')
 burr_mesh = o3d.io.read_triangle_mesh('dental_env/cad/burr.stl')
+frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
 
 cary_voxel = o3d.geometry.VoxelGrid.create_from_triangle_mesh(cary_mesh, voxel_size=0.1)
 enamel_voxel = o3d.geometry.VoxelGrid.create_from_triangle_mesh(enamel_mesh, voxel_size=0.1)
@@ -38,13 +39,16 @@ burr_voxel = o3d.geometry.VoxelGrid.create_from_triangle_mesh(burr_mesh, voxel_s
 
 o3d.visualization.draw_geometries([cary_voxel, enamel_voxel, burr_voxel])
 
-o3d.visualization.draw_geometries([cary_mesh, burr_mesh])
+o3d.visualization.draw_geometries([frame, burr_mesh])
+print(cary_mesh.get_center())
 agent_rotation = np.array([1, 1, 0, 0], dtype=np.float64)
-burr_mesh.rotate(burr_mesh.get_rotation_matrix_from_quaternion(agent_rotation))
-o3d.visualization.draw_geometries([cary_mesh, burr_mesh])
+burr_mesh.translate(cary_mesh.get_center(), relative=False)
+# burr_mesh.rotate(burr_mesh.get_rotation_matrix_from_quaternion(agent_rotation), [0, 0, 0])
+o3d.visualization.draw_geometries([frame, burr_mesh])
+burr_mesh.rotate(burr_mesh.get_rotation_matrix_from_quaternion(agent_rotation).transpose())
 agent_rotation = np.array([1, 0, 0, 1], dtype=np.float64)
 burr_mesh.rotate(burr_mesh.get_rotation_matrix_from_quaternion(agent_rotation))
-o3d.visualization.draw_geometries([cary_mesh, burr_mesh])
+o3d.visualization.draw_geometries([frame, burr_mesh])
 
 
 

@@ -108,8 +108,8 @@ class DentalEnvBase(gym.Env):
         self._burr = self._burr_init.copy()
         position = (self._agent_location - np.array(self._state_init.shape)//2) * self._resolution
         self._burr.apply_translation(position)
-        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
-                                                           int(np.max(self._state_init.shape)))
+        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, np.ones(3)*self._resolution/2, self._resolution,
+                                                           int(np.max(self._state_init.shape)//2))
         self._burr_occupancy = self.crop_center(burr_voxel.matrix, self._state_init.shape[0],
                                                 self._state_init.shape[1], self._state_init.shape[2])
         self._states[self._state_label['burr']] = self._burr_occupancy
@@ -134,8 +134,8 @@ class DentalEnvBase(gym.Env):
         self._burr = self._burr_init.copy()
         position = (self._agent_location - np.array(self._state_init.shape)//2) * self._resolution
         self._burr.apply_translation(position)
-        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
-                                                           int(np.max(self._state_init.shape)))
+        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, np.ones(3)*self._resolution/2, self._resolution,
+                                                           int(np.max(self._state_init.shape)//2))
         self._burr_occupancy = self.crop_center(burr_voxel.matrix, self._state_init.shape[0],
                                                 self._state_init.shape[1], self._state_init.shape[2])
 
@@ -189,13 +189,13 @@ class DentalEnvBase(gym.Env):
             self._burr_center = self._burr_vis.get_center()
             self._ee_center = self._ee_vis.get_center()
 
-            self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
-            self._ee_vis.translate(self._ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            self._burr_vis.translate(self._burr_center + self._agent_location, relative=False)
+            self._ee_vis.translate(self._ee_center + self._agent_location, relative=False)
 
             self.window.add_geometry(self._states_voxel)
             self.window.add_geometry(self._burr_voxel)
             self.window.add_geometry(self._burr_vis)
-            self.window.add_geometry(self._ee_vis)
+            # self.window.add_geometry(self._ee_vis)
 
             self.window.add_geometry(self._bounding_box())
             frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1/self._resolution)
@@ -210,13 +210,13 @@ class DentalEnvBase(gym.Env):
                 self._states_voxel.remove_voxel(idx)
             self._update_burr_voxels()
 
-            self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
-            self._ee_vis.translate(self._ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
+            self._burr_vis.translate(self._burr_center + self._agent_location, relative=False)
+            self._ee_vis.translate(self._ee_center + self._agent_location, relative=False)
 
             self.window.update_geometry(self._states_voxel)
             self.window.update_geometry(self._burr_voxel)
             self.window.update_geometry(self._burr_vis)
-            self.window.update_geometry(self._ee_vis)
+            # self.window.update_geometry(self._ee_vis)
 
             self.window.poll_events()
             self.window.update_renderer()

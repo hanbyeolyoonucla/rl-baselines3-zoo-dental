@@ -113,8 +113,8 @@ class DentalEnv5D(gym.Env):
         position = (self._agent_location - np.array(self._state_init.shape)//2) * self._resolution
         self._burr.apply_transform(trimesh.transformations.quaternion_matrix(self._agent_rotation))
         self._burr.apply_translation(position)
-        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
-                                                           int(np.max(self._state_init.shape)))
+        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, np.ones(3)*self._resolution/2, self._resolution,
+                                                           int(np.max(self._state_init.shape)//2))
         self._burr_occupancy = self.crop_center(burr_voxel.matrix, self._state_init.shape[0],
                                                 self._state_init.shape[1], self._state_init.shape[2])
         self._states[self._state_label['burr']] = self._burr_occupancy
@@ -136,16 +136,21 @@ class DentalEnv5D(gym.Env):
         )
         self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
                                           (np.array(self._state_init.shape)//2)
-        self._agent_rotation = (UnitQuaternion(self._agent_rotation)
-                                * UnitQuaternion(SO3.RPY(10*action[3], 10*action[4], 0, unit='deg'))).A
+        agent_rotation = (UnitQuaternion(self._agent_rotation)
+                          * UnitQuaternion(SO3.RPY(10*action[3], 10*action[4], 0, unit='deg')))
+        if agent_rotation.angvec()[0] >= np.pi/3:
+            self._agent_rotation = UnitQuaternion.AngVec(np.pi/3, agent_rotation.angvec()[1]).A
+        else:
+            self._agent_rotation = agent_rotation.A
+
 
         # burr pose update
         self._burr = self._burr_init.copy()
         position = (self._agent_location - np.array(self._state_init.shape)//2) * self._resolution
         self._burr.apply_transform(trimesh.transformations.quaternion_matrix(self._agent_rotation))
         self._burr.apply_translation(position)
-        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, [0, 0, 0], self._resolution,
-                                                           int(np.max(self._state_init.shape)))
+        burr_voxel = trimesh.voxel.creation.local_voxelize(self._burr, np.ones(3)*self._resolution/2, self._resolution,
+                                                           int(np.max(self._state_init.shape)//2))
         self._burr_occupancy = self.crop_center(burr_voxel.matrix, self._state_init.shape[0],
                                                 self._state_init.shape[1], self._state_init.shape[2])
 
@@ -188,7 +193,8 @@ class DentalEnv5D(gym.Env):
         if self.window is None and self.render_mode == "human":
 
             self.window = o3d.visualization.Visualizer()
-            self.window.create_window(window_name='Cut Path Episode', width=1080, height=1080, left=50, top=50, visible=True)
+            self.window.create_window(window_name='Cut Path Episode', width=1080, height=1080,
+                                      left=50, top=50, visible=True)
 
             self._states_voxel = o3d.geometry.VoxelGrid()
             self._burr_voxel = o3d.geometry.VoxelGrid()
@@ -202,18 +208,22 @@ class DentalEnv5D(gym.Env):
             self._burr_center = self._burr_vis.get_center()
             self._ee_center = self._ee_vis.get_center()
 
-            self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
-            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation))
-            self._ee_vis.translate(self._ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
-            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation))
+            self._burr_vis.translate(self._burr_center+self._agent_location, relative=False)
+            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation),
+                                  center=self._burr_center+self._agent_location)
+            self._ee_vis.translate(self._ee_center+self._agent_location, relative=False)
+            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation),
+                                center=self._burr_center+self._agent_location)
 
             self.window.add_geometry(self._states_voxel)
-            self.window.add_geometry(self._burr_voxel)
+            # self.window.add_geometry(self._burr_voxel)
             self.window.add_geometry(self._burr_vis)
             # self.window.add_geometry(self._ee_vis)
 
-            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose())
-            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose())
+            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
+                                  center=self._burr_center+self._agent_location)
+            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
+                                center=self._burr_center+self._agent_location)
 
             self.window.add_geometry(self._bounding_box())
             frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1/self._resolution)
@@ -228,21 +238,25 @@ class DentalEnv5D(gym.Env):
                 self._states_voxel.remove_voxel(idx)
             self._update_burr_voxels()
 
-            self._burr_vis.translate(self._burr_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
-            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation))
-            self._ee_vis.translate(self._ee_center+self._agent_location + [0.5, 0.5, 0.5], relative=False)
-            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation))
+            self._burr_vis.translate(self._burr_center+self._agent_location, relative=False)
+            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation),
+                                  center=self._burr_center+self._agent_location)
+            self._ee_vis.translate(self._ee_center+self._agent_location, relative=False)
+            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation),
+                                center=self._burr_center+self._agent_location)
 
             self.window.update_geometry(self._states_voxel)
-            self.window.update_geometry(self._burr_voxel)
+            # self.window.update_geometry(self._burr_voxel)
             self.window.update_geometry(self._burr_vis)
             # self.window.update_geometry(self._ee_vis)
 
-            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose())
-            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose())
-
             self.window.poll_events()
             self.window.update_renderer()
+
+            self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
+                                  center=self._burr_center+self._agent_location)
+            self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
+                                center=self._burr_center+self._agent_location)
 
     @staticmethod
     def crop_center(voxel, cropx, cropy, cropz):

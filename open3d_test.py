@@ -37,7 +37,7 @@ cary_voxel = o3d.geometry.VoxelGrid.create_from_triangle_mesh(cary_mesh, voxel_s
 enamel_voxel = o3d.geometry.VoxelGrid.create_from_triangle_mesh(enamel_mesh, voxel_size=0.1)
 burr_voxel = o3d.geometry.VoxelGrid.create_from_triangle_mesh(burr_mesh, voxel_size=0.1)
 
-o3d.visualization.draw_geometries([cary_voxel, enamel_voxel, burr_voxel])
+# o3d.visualization.draw_geometries([cary_voxel, enamel_voxel, burr_voxel])
 
 o3d.visualization.draw_geometries([frame, burr_mesh])
 print(cary_mesh.get_center())

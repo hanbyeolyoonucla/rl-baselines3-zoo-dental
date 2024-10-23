@@ -189,6 +189,7 @@ class DentalEnvBase(gym.Env):
             self._burr_center = self._burr_vis.get_center()
             self._ee_center = self._ee_vis.get_center()
 
+            # translate the center of object (center: mean of the vertices position)
             self._burr_vis.translate(self._burr_center + self._agent_location, relative=False)
             self._ee_vis.translate(self._ee_center + self._agent_location, relative=False)
 

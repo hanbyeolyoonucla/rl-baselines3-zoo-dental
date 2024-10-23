@@ -4,6 +4,7 @@ import logging
 
 import numpy as np
 import trimesh
+import fcl
 import open3d as o3d
 import nibabel as nib
 from spatialmath import SO3, SE3, UnitQuaternion
@@ -27,17 +28,11 @@ class DentalEnv6D(gym.Env):
         self._window_size = 512
         self._original_resolution = 0.034  # 34 micron per voxel
         self._resolution = self._original_resolution * self._ds  # resolution of each voxel
-        self._collision_check = collision_check
+        self._col_check = collision_check
+        self._collision = False
 
         # Initialize segmentations
         self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
-        # data specific alignment - using affine transform
-        # shape = self._state_init.shape
-        # center = np.array(shape) / 2
-        # transform = SE3.Trans(center[::-1])*SE3.Rt(SO3.RPY(0, -np.pi/2, 0), [0, 0, 0])*SE3.Trans(-center)
-        # transform = transform.inv()
-        # self._state_init = affine_transform(self._state_init, transform.A, order=0,
-        #                                     output_shape=(shape[2], shape[1], shape[0]))
         self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
         # data specific alignment - using simple numpy rot90
         self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
@@ -56,15 +51,32 @@ class DentalEnv6D(gym.Env):
         self._burr_vis_init.scale(scale=1/self._resolution, center=[0, 0, 0])  # burr stl to match with voxel resolution
         self._burr_init = trimesh.load('dental_env/cad/burr.stl')
         self._burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+
+        # Initialize end effector
         self._ee_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/end_effector_no_bur.stl')
         self._ee_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [0, 1, 0]))
-        # self._ee_vis_init.translate((0, 0, 10))  # translate by burr length 10 mm
         self._ee_vis_init.scale(scale=1000 / self._resolution, center=[0, 0, 0])
+        self._ee_vis_init.compute_vertex_normals()
 
         # Initialize jaw
-        self._jaw = o3d.io.read_triangle_mesh('dental_env/cad/combined_jaw.stl')
+        # self._jaw = o3d.io.read_triangle_mesh('dental_env/cad/combined_jaw.stl')
+        self._jaw = o3d.io.read_triangle_mesh('dental_env/cad/maxilla_with_stent.stl')
         self._jaw.scale(scale=1/self._resolution, center=[0, 0, 0])
-        self._jaw.translate(np.array(self._state_init.shape)//2)
+        self._jaw.translate(np.array(self._state_init.shape)//2)  # + np.array([0, 0, 1])*self._state_init.shape[2]//4
+        self._jaw.compute_vertex_normals()
+
+        # Define collision object
+        if self._col_check:
+            ee = fcl.BVHModel()
+            ee.beginModel(len(self._ee_vis_init.vertices), len(self._ee_vis_init.triangles))
+            ee.addSubModel(self._ee_vis_init.vertices, self._ee_vis_init.triangles)
+            ee.endModel()
+            self._ee_col = fcl.CollisionObject(ee)
+            jaw = fcl.BVHModel()
+            jaw.beginModel(len(self._jaw.vertices), len(self._jaw.triangles))
+            jaw.addSubModel(self._jaw.vertices, self._jaw.triangles)
+            jaw.endModel()
+            self._jaw_col = fcl.CollisionObject(jaw)
 
         # Define obs and action space
         self.observation_space = spaces.Dict(
@@ -77,7 +89,7 @@ class DentalEnv6D(gym.Env):
             }
         )
 
-        self.action_space = spaces.Box(low=-1, high=1, shape=(5,), dtype=np.int32)
+        self.action_space = spaces.Box(low=-1, high=1, shape=(6,), dtype=np.int32)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -98,10 +110,9 @@ class DentalEnv6D(gym.Env):
         super().reset(seed=seed)
 
         # agent initialization
-        # self._agent_location = np.array([self._state_init.shape[0]//2, self._state_init.shape[1]//2,
-        #                                  self._state_init.shape[2]-5]).astype(int)  # start from random
-        self._agent_location = self.np_random.integers(low=[0, 0, int(self._state_init.shape[2]*4/5)],
-                                                       high=self._state_init.shape, dtype=np.int32)  # start from random
+        self._agent_location = np.array(self._state_init.shape)//2 + np.array([0,0,1]) * self._state_init.shape[2]*2//5
+        # self._agent_location = self.np_random.integers(low=[0, 0, int(self._state_init.shape[2]*2/4)],
+        #                                                high=self._state_init.shape, dtype=np.int32)  # start from random
         self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
                                           (np.array(self._state_init.shape)//2)
         self._agent_rotation = np.array([1, 0, 0, 0], dtype=np.float64)
@@ -143,12 +154,11 @@ class DentalEnv6D(gym.Env):
         self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
                                           (np.array(self._state_init.shape)//2)
         agent_rotation = (UnitQuaternion(self._agent_rotation)
-                          * UnitQuaternion(SO3.RPY(10*action[3], 10*action[4], 0, unit='deg')))
-        if agent_rotation.angvec()[0] >= np.pi/3:
-            self._agent_rotation = UnitQuaternion.AngVec(np.pi/3, agent_rotation.angvec()[1]).A
+                          * UnitQuaternion(SO3.RPY(3*action[3], 3*action[4], 3*action[5], unit='deg')))
+        if agent_rotation.angvec()[0] >= np.pi/6:
+            self._agent_rotation = UnitQuaternion.AngVec(np.pi/6, agent_rotation.angvec()[1]).A
         else:
             self._agent_rotation = agent_rotation.A
-
 
         # burr pose update
         self._burr = self._burr_init.copy()
@@ -160,6 +170,16 @@ class DentalEnv6D(gym.Env):
         self._burr_occupancy = self.crop_center(burr_voxel.matrix, self._state_init.shape[0],
                                                 self._state_init.shape[1], self._state_init.shape[2])
 
+        # collision check
+        self._collision = False
+        if self._col_check:
+            self._ee_col.setTransform(fcl.Transform(self._agent_rotation, self._agent_location))
+            request = fcl.CollisionRequest()
+            result = fcl.CollisionResult()
+            ret = fcl.collide(self._ee_col, self._jaw_col, request, result)
+            if ret > 0:
+                self._collision = True
+
         # reward
         burr_decay_occupancy = self._states[self._state_label['decay'], self._burr_occupancy]
         burr_enamel_occupancy = self._states[self._state_label['enamel'], self._burr_occupancy]
@@ -167,7 +187,7 @@ class DentalEnv6D(gym.Env):
         reward_decay_removal = np.sum(burr_decay_occupancy)
         reward_enamel_removal = np.sum(burr_enamel_occupancy)
         reward_dentin_removal = np.sum(burr_dentin_occupancy)
-        reward = 1000 * reward_decay_removal - 10 * reward_enamel_removal - 100 * reward_dentin_removal - 1
+        reward = 1000*reward_decay_removal - 10*reward_enamel_removal - 100*reward_dentin_removal - 1 - 100*self._collision
 
         # state
         self._states[self._state_label['decay'], self._burr_occupancy] = 0
@@ -211,8 +231,6 @@ class DentalEnv6D(gym.Env):
 
             self._ee_vis = copy.deepcopy(self._ee_vis_init)
             self._burr_vis = copy.deepcopy(self._burr_vis_init)
-            self._ee_vis.compute_vertex_normals()
-            self._burr_vis.compute_vertex_normals()
             self._burr_center = self._burr_vis.get_center()
             self._ee_center = self._ee_vis.get_center()
 
@@ -226,9 +244,6 @@ class DentalEnv6D(gym.Env):
             self.window.add_geometry(self._states_voxel)
             # self.window.add_geometry(self._burr_voxel)
             self.window.add_geometry(self._burr_vis)
-            self.window.add_geometry(self._ee_vis)
-            self._jaw.compute_vertex_normals()
-            self.window.add_geometry(self._jaw)
 
             self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
                                   center=self._agent_location)
@@ -241,6 +256,20 @@ class DentalEnv6D(gym.Env):
 
             ctr = self.window.get_view_control()
             ctr.rotate(0, -200)
+
+            if self._col_check:
+                self.window_col = o3d.visualization.Visualizer()
+                self.window_col.create_window(window_name='Cut Path Episode - Collision Status',
+                                              width=1080, height=1080, left=1130, top=50, visible=True)
+
+                self.window_col.add_geometry(self._burr_vis)
+                self.window_col.add_geometry(self._ee_vis)
+                self.window_col.add_geometry(self._jaw)
+                self.window_col.add_geometry(self._bounding_box())
+                self.window_col.add_geometry(frame)
+
+                ctr_col = self.window_col.get_view_control()
+                ctr_col.rotate(0, -300)
 
         if self.render_mode == "human":
 
@@ -258,10 +287,22 @@ class DentalEnv6D(gym.Env):
             self.window.update_geometry(self._states_voxel)
             # self.window.update_geometry(self._burr_voxel)
             self.window.update_geometry(self._burr_vis)
-            self.window.update_geometry(self._ee_vis)
 
             self.window.poll_events()
             self.window.update_renderer()
+
+            if self._col_check:
+
+                if self._collision:
+                    self._ee_vis.paint_uniform_color(np.array([1, 0, 0]))
+                else:
+                    self._ee_vis.paint_uniform_color(np.array([0.7, 0.7, 0.7]))
+
+                self.window_col.update_geometry(self._burr_vis)
+                self.window_col.update_geometry(self._ee_vis)
+
+                self.window_col.poll_events()
+                self.window_col.update_renderer()
 
             self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
                                   center=self._agent_location)

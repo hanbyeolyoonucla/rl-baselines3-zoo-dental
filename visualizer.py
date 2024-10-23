@@ -4,18 +4,14 @@ import torch
 
 # env = gym.make("DentalEnv-v0", render_mode="human", max_episode_steps=1024, down_sample=30)
 # env = gym.make("DentalEnv5D-v1", render_mode="human", max_episode_steps=1024, down_sample=10)
-env = gym.make("DentalEnv6D-v0", render_mode="human", max_episode_steps=1024, down_sample=10)
+env = gym.make("DentalEnv6D-v0", render_mode="human", max_episode_steps=1000, down_sample=10)
 
 
 observation, info = env.reset(seed=42)
 
 for _ in range(1000):
     action = env.action_space.sample()
-    # action, _ = model.predict(observation)
-    # action[3:] = 0
     state, reward, terminated, truncated, _ = env.step(action)
-    # print(state['agent_pos'])
-    # print(state['agent_rot'])
     print(reward)
     if terminated or truncated:
         env.close()

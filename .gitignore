@@ -40,3 +40,4 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+dental_env/labels_augmented/

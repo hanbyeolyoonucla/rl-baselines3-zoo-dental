@@ -21,10 +21,12 @@ class DentalEnv6D(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, down_sample=10, collision_check=True):
+    def __init__(self, render_mode=None, down_sample=10, angle_res=3, coffset=True, collision_check=True):
 
         # Define settings
         self._ds = down_sample
+        self._coffset = 0.5 if coffset else 0
+        self._angle_resolution = angle_res  # burr orientation resolution 3 deg
         self._window_size = 512
         self._original_resolution = 0.034  # 34 micron per voxel
         self._resolution = self._original_resolution * self._ds  # resolution of each voxel
@@ -32,10 +34,11 @@ class DentalEnv6D(gym.Env):
         self._collision = False
 
         # Initialize segmentations
-        self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
-        self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
-        # data specific alignment - using simple numpy rot90
-        self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
+        # self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
+        # self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
+        # # data specific alignment - using simple numpy rot90
+        # self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
+        self._state_init = np.load('dental_env/labels_augmented/tooth_2_1.0_0_0_0_0_0_0.npy')
         self._state_label = {
             "empty": 0,
             "decay": 1,
@@ -110,7 +113,8 @@ class DentalEnv6D(gym.Env):
         super().reset(seed=seed)
 
         # agent initialization
-        self._agent_location = np.array(self._state_init.shape)//2 + np.array([0,0,1]) * self._state_init.shape[2]*2//5
+        self._agent_location = np.array([9, 25, 59]) + np.ones(3)*self._coffset
+        # self._agent_location = np.array(self._state_init.shape)//2 + np.array([0,0,1]) * self._state_init.shape[2]*2//5
         # self._agent_location = self.np_random.integers(low=[0, 0, int(self._state_init.shape[2]*2/4)],
         #                                                high=self._state_init.shape, dtype=np.int32)  # start from random
         self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
@@ -149,14 +153,16 @@ class DentalEnv6D(gym.Env):
     def step(self, action):
         # action
         self._agent_location = np.clip(
-            self._agent_location + action[:3], a_min=0, a_max=self._state_init.shape
+            self._agent_location + action[:3],
+            a_min=0 + self._coffset, a_max=np.array(self._state_init.shape) - np.ones(3)*self._coffset
         )
         self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
                                           (np.array(self._state_init.shape)//2)
         agent_rotation = (UnitQuaternion(self._agent_rotation)
-                          * UnitQuaternion(SO3.RPY(3*action[3], 3*action[4], 3*action[5], unit='deg')))
-        if agent_rotation.angvec()[0] >= np.pi/6:
-            self._agent_rotation = UnitQuaternion.AngVec(np.pi/6, agent_rotation.angvec()[1]).A
+                          * UnitQuaternion(SO3.RPY(self._angle_resolution*action[3], self._angle_resolution*action[4],
+                                                   self._angle_resolution*action[5], unit='deg')))
+        if agent_rotation.angvec()[0] >= np.pi/2:
+            self._agent_rotation = UnitQuaternion.AngVec(np.pi/2, agent_rotation.angvec()[1]).A
         else:
             self._agent_rotation = agent_rotation.A
 

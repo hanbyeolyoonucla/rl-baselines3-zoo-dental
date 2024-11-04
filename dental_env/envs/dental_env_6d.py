@@ -38,7 +38,7 @@ class DentalEnv6D(gym.Env):
         # self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
         # # data specific alignment - using simple numpy rot90
         # self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
-        self._state_init = np.load('dental_env/labels_augmented/tooth_2_1.0_0_0_0_0_0_0.npy')
+        self._state_init = np.load('dental_env/labels_augmented/tooth_4_1.0_0_0_0_0_0_0.npy')
         self._state_label = {
             "empty": 0,
             "decay": 1,

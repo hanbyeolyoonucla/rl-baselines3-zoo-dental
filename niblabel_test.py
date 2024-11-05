@@ -107,8 +107,10 @@ def downsample_state(state, ds=10):
 
 if __name__ == "__main__":
 
-    vis_only = True
-    # vis_only = False
+    # vis_only = True
+    vis_only = False
+    alignment_check = True
+    # alignment_check = False
     tnum = 2
 
     state = {
@@ -119,7 +121,7 @@ if __name__ == "__main__":
     }
 
     if vis_only:
-        scale, rz, ry, rx, tx, ty, tz = 1.0, 90, -15, 15, -5, 0, 0
+        scale, rz, ry, rx, tx, ty, tz = 1.0, 0, 0, 0, 0, 0, 0
         data = np.load(f'dental_env/labels_augmented/tooth_{tnum}_{scale}_{rx}_{ry}_{rz}_{tx}_{ty}_{tz}.npy')
         states_voxel = np_to_voxels(state, data)
         bbox = bounding_box(data)
@@ -128,30 +130,35 @@ if __name__ == "__main__":
     else:
         img = nib.load(f'dental_env/labels/tooth_{tnum}.nii.gz')
         nparr_init = img.get_fdata().astype(int)
-        # nparr_init = nparr_init[::10,::10,::10]
-        nparr_init = downsample_state(nparr_init, 10)
-        # nparr_init = np.rot90(nparr_init, k=-1, axes=(1, 2))
-        nparr_init = np.rot90(nparr_init, k=1,
-                              axes=(0, 2))  # tooth 2: 1 (0,2), tooth3: -1 (0,2), tooth4: -1 (1,2) 1 (0, 1) tooth5: -1 (1,2)
+        # nparr = nparr_init[::10,::10,::10]
+        nparr = downsample_state(nparr_init, 10)
+        # tooth 2: 1 (0,2), tooth3: -1 (0,2), tooth4: -1 (1,2) tooth5: -1 (1,2) 1 (0, 1)
+        # nparr = np.rot90(nparr, k=-1, axes=(0, 2))
+        nparr = np.rot90(nparr, k=1, axes=(0, 2))
 
-        input_shape = nparr_init.shape
-        output_shape = nparr_init.shape  # (input_shape[2], input_shape[1], input_shape[0])
+        input_shape = nparr.shape
+        output_shape = nparr.shape
         input_center = np.array(input_shape) / 2
         output_center = np.array(output_shape) / 2
 
-        # tooth2 x20, tooth3 0, tooth4 y20, tooth5 0
+        # # tooth2 x20, tooth3 0, tooth4 y-20, tooth5 0
         transform = SE3.Trans(output_center) * SE3.Rt(SO3.RPY([20, 0, 0], unit="deg"), [0, 0, 0]) * SE3.Trans(-input_center)
         transform = transform.inv()
-        nparr = affine_transform(nparr_init, transform.A, order=0, output_shape=output_shape)
+        nparr = affine_transform(nparr, transform.A, order=0, output_shape=output_shape)
         original_shape = np.array(nparr.shape)
+        if alignment_check:
+            states_voxel = np_to_voxels(state, nparr)
+            bbox = bounding_box(nparr)
+            frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=10)
+            o3d.visualization.draw_geometries([states_voxel, bbox, frame])
 
         scales = [0.9, 1.0, 1.1]
         rotations_z = [0, 45, 90, 135, 180, 225, 270, 315]
-        rotations_y = [-15, 0, 15]
-        rotations_x = [-15, 0, 15]
+        rotations_y = [-10, 0, 10]
+        rotations_x = [-10, 0, 10]
         translations_x = [-5, 0, 5]
         translations_y = [-5, 0, 5]
-        translations_z = [-5, 0, 5]
+        translations_z = [-10, -5, 0]
 
         combinations = list(product(scales, rotations_z, rotations_y, rotations_x,
                                     translations_x, translations_y, translations_z))
@@ -183,9 +190,10 @@ if __name__ == "__main__":
             np.save(f'dental_env/labels_augmented/tooth_{tnum}_{scale}_{rx}_{ry}_{rz}_{tx}_{ty}_{tz}.npy',
                     nparr_transformed)
 
-        scale, rz, ry, rx, tx, ty, tz = 1.1, 0, 15, 15, 5, 5, 5
+        scale, rz, ry, rx, tx, ty, tz = 1.0, 0, 0, 0, 0, 0, 0
         data = np.load(f'dental_env/labels_augmented/tooth_{tnum}_{scale}_{rx}_{ry}_{rz}_{tx}_{ty}_{tz}.npy')
         states_voxel = np_to_voxels(state, data)
+        bbox = bounding_box(data)
         frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=10)
-        o3d.visualization.draw_geometries([states_voxel, frame])
+        o3d.visualization.draw_geometries([states_voxel, bbox, frame])
 

@@ -21,7 +21,8 @@ class DentalEnv6D(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, down_sample=10, angle_res=3, coffset=True, collision_check=True):
+    def __init__(self, render_mode=None, down_sample=10, angle_res=3, coffset=True, collision_check=True,
+                 tooth='tooth_4_1.0_0_0_0_0_0_0'):
 
         # Define settings
         self._ds = down_sample
@@ -38,7 +39,7 @@ class DentalEnv6D(gym.Env):
         # self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
         # # data specific alignment - using simple numpy rot90
         # self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
-        self._state_init = np.load('dental_env/labels_augmented/tooth_4_1.0_0_0_0_0_0_0.npy')
+        self._state_init = np.load(f'dental_env/labels_augmented/{tooth}.npy')
         self._state_label = {
             "empty": 0,
             "decay": 1,
@@ -84,10 +85,10 @@ class DentalEnv6D(gym.Env):
         # Define obs and action space
         self.observation_space = spaces.Dict(
             {
-                "agent_pos": spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float64),
-                "agent_rot": spaces.Box(low=np.array([-1, -1, -1, -1]),
+                "burr_pos": spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float64),
+                "burr_rot": spaces.Box(low=np.array([-1, -1, -1, -1]),
                                         high=np.array([1, 1, 1, 1]), dtype=np.float64),
-                "states": spaces.MultiBinary([self._channel, self._state_init.shape[0], self._state_init.shape[1],
+                "state": spaces.MultiBinary([self._channel, self._state_init.shape[0], self._state_init.shape[1],
                                               self._state_init.shape[2]]),
             }
         )
@@ -100,7 +101,7 @@ class DentalEnv6D(gym.Env):
         self.clock = None
 
     def _get_obs(self):
-        return {"agent_pos": self._agent_location_normalized, "agent_rot": self._agent_rotation, "states": self._states}
+        return {"burr_pos": self._agent_location_normalized, "burr_rot": self._agent_rotation, "state": self._states}
 
     def _get_info(self):
         return {
@@ -113,8 +114,9 @@ class DentalEnv6D(gym.Env):
         super().reset(seed=seed)
 
         # agent initialization
-        self._agent_location = np.array([9, 25, 59]) + np.ones(3)*self._coffset
-        # self._agent_location = np.array(self._state_init.shape)//2 + np.array([0,0,1]) * self._state_init.shape[2]*2//5
+        self._agent_location = np.array([self._state_init.shape[0]//2,
+                                         self._state_init.shape[1]//2,
+                                         self._state_init.shape[2]-1])
         # self._agent_location = self.np_random.integers(low=[0, 0, int(self._state_init.shape[2]*2/4)],
         #                                                high=self._state_init.shape, dtype=np.int32)  # start from random
         self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \

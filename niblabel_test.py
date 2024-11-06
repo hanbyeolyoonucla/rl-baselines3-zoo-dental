@@ -107,8 +107,8 @@ def downsample_state(state, ds=10):
 
 if __name__ == "__main__":
 
-    # vis_only = True
-    vis_only = False
+    vis_only = True
+    # vis_only = False
     alignment_check = True
     # alignment_check = False
     tnum = 2

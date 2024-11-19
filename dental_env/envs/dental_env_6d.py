@@ -93,7 +93,8 @@ class DentalEnv6D(gym.Env):
             }
         )
 
-        self.action_space = spaces.Box(low=-1, high=1, shape=(6,), dtype=np.int32)
+        # self.action_space = spaces.Box(low=-1, high=1, shape=(6,), dtype=np.int32)
+        self.action_space = spaces.MultiDiscrete([3, 3, 3, 3, 3, 3])
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -154,6 +155,7 @@ class DentalEnv6D(gym.Env):
 
     def step(self, action):
         # action
+        action = action - 1  # [0 1 2] to [-1 0 1]
         self._agent_location = np.clip(
             self._agent_location + action[:3],
             a_min=0 + self._coffset, a_max=np.array(self._state_init.shape) - np.ones(3)*self._coffset

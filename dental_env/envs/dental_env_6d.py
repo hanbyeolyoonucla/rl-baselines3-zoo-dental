@@ -88,7 +88,7 @@ class DentalEnv6D(gym.Env):
                 "burr_pos": spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float64),
                 "burr_rot": spaces.Box(low=np.array([-1, -1, -1, -1]),
                                         high=np.array([1, 1, 1, 1]), dtype=np.float64),
-                "state": spaces.MultiBinary([self._channel, self._state_init.shape[0], self._state_init.shape[1],
+                "voxel": spaces.MultiBinary([self._channel, self._state_init.shape[0], self._state_init.shape[1],
                                               self._state_init.shape[2]]),
             }
         )
@@ -101,7 +101,7 @@ class DentalEnv6D(gym.Env):
         self.clock = None
 
     def _get_obs(self):
-        return {"burr_pos": self._agent_location_normalized, "burr_rot": self._agent_rotation, "state": self._states}
+        return {"burr_pos": self._agent_location_normalized, "burr_rot": self._agent_rotation, "voxel": self._states}
 
     def _get_info(self):
         return {
@@ -397,3 +397,6 @@ class DentalEnv6D(gym.Env):
             self.window.close()
             self.window = None
 
+        if self.window_col is not None and self.render_mode == "human":
+            self.window_col.close()
+            self.window_col = None

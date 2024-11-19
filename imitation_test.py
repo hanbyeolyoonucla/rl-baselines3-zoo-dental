@@ -10,63 +10,45 @@ from hyperparams.python.ppo_config import hyperparams
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.policies import MultiInputActorCriticPolicy
+from stable_baselines3.common.utils import get_schedule_fn
+import h5py
+from imitation.data.types import TrajectoryWithRew, DictObs
 
-tnums = [2, 3]
-trajectories = []
-trajectories_accum = rollout.TrajectoryAccumulator()
+with h5py.File('dental_env/demonstrations/train_dataset.hdf5', 'r') as f:
+    trajectories = []
+    for demo in f.keys():
+        dictobs = dict(voxel=f[demo]['obs']['voxel'][:],
+                       burr_pos=f[demo]['obs']['burr_pos'][:],
+                       burr_rot=f[demo]['obs']['burr_rot'][:])
+        trajectory = TrajectoryWithRew(obs=DictObs(dictobs),
+                                       acts=f[demo]['acts'][:],
+                                       infos=f[demo]['info']['is_success'][:],
+                                       rews=f[demo]['rews'][:],
+                                       terminal=True)
+        trajectories.append(trajectory)
 
-for idx, tnum in enumerate(tnums):
 
-    env = gym.make("DentalEnv6D-v0", render_mode="human", down_sample=10, tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
-    # vec_env = make_vec_env("DentalEnv6D-v0", env_kwargs={'render_mode':"rgb_array", 'down_sample':10, 'tooth':f"tooth_{tnum}_1.0_0_0_0_0_0_0"})
-
-    obs, info = env.reset(seed=42)
-    wrapped_obs = types.maybe_wrap_in_dictobs(obs)
-    trajectories_accum.add_step(dict(obs=wrapped_obs), idx)
-
-    # test demonstration
-    demons = pd.read_csv(f'dental_env/demonstrations/tooth_{tnum}_demonstration.csv')
-    time_steps = len(demons)
-
-    for itr in range(time_steps-1):
-        # action = env.action_space.sample()
-        action = demons.iloc[itr+1].to_numpy() - demons.iloc[itr].to_numpy()
-        action[3:] = action[3:]//3
-        obs, reward, terminated, truncated, info = env.step(action)
-        wrapped_obs = types.maybe_wrap_in_dictobs(obs)
-        trajectories_accum.add_step(dict(acts=action, rews=float(reward), obs=wrapped_obs, infos=info), idx)
-
-        # if terminated or truncated:
-        #     env.close()
-        #     observation, info = env.reset()
-
-    new_traj = trajectories_accum.finish_trajectory(idx, terminal=True)
-    trajectories.append(new_traj)
-    env.close()
-
-serialize.save('dental_env/demonstrations', trajectories)
 transitions = rollout.flatten_trajectories(trajectories)
 
-tnum = 1
-env = gym.make("DentalEnv6D-v0", render_mode="human", down_sample=10, tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
-model = PPO('MultiInputPolicy', env, **hyperparams)
+tnum = 2
+env = gym.make("DentalEnv6D-v0", max_episode_steps=800,
+               render_mode="rgb_array", down_sample=10, tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
+policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
+                                     action_space=env.action_space,
+                                     lr_schedule=get_schedule_fn(0.0003),
+                                     **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
+rng = np.random.default_rng(0)
 bc_trainer = bc.BC(
     observation_space=env.observation_space,
     action_space=env.action_space,
     demonstrations=transitions,
-    policy=model,
+    policy=policy,
+    rng=rng,
 )
-reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
+reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 1)
 print(f"Reward before training: {reward_before_training}")
+
 bc_trainer.train(n_epochs=1)
-reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
+reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 1)
 print(f"Reward after training: {reward_after_training}")
-        # else:
-        #     # Train an agent from scratch
-        #     model = ALGOS[self.algo](
-        #         env=env,
-        #         tensorboard_log=self.tensorboard_log,
-        #         seed=self.seed,
-        #         verbose=self.verbose,
-        #         device=self.device,
-        #         **self._hyperp

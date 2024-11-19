@@ -111,7 +111,7 @@ if __name__ == "__main__":
     # vis_only = False
     alignment_check = True
     # alignment_check = False
-    tnum = 2
+    tnum = 5
 
     state = {
         "empty": 0,
@@ -132,17 +132,19 @@ if __name__ == "__main__":
         nparr_init = img.get_fdata().astype(int)
         # nparr = nparr_init[::10,::10,::10]
         nparr = downsample_state(nparr_init, 10)
-        # tooth 2: 1 (0,2), tooth3: -1 (0,2), tooth4: -1 (1,2) tooth5: -1 (1,2) 1 (0, 1)
+        # tooth 2: 1 (0,2), tooth3: -1 (0,2), tooth4: -1 (1,2) 1 (0, 1), tooth5: -1 (1,2) 1 (0, 1)
+        # nparr = np.rot90(nparr, k=1, axes=(0, 2))
         # nparr = np.rot90(nparr, k=-1, axes=(0, 2))
-        nparr = np.rot90(nparr, k=1, axes=(0, 2))
+        nparr = np.rot90(nparr, k=-1, axes=(1, 2))
+        nparr = np.rot90(nparr, k=1, axes=(0, 1))
 
         input_shape = nparr.shape
         output_shape = nparr.shape
         input_center = np.array(input_shape) / 2
         output_center = np.array(output_shape) / 2
 
-        # # tooth2 x20, tooth3 0, tooth4 y-20, tooth5 0
-        transform = SE3.Trans(output_center) * SE3.Rt(SO3.RPY([20, 0, 0], unit="deg"), [0, 0, 0]) * SE3.Trans(-input_center)
+        # # tooth2 x20, tooth3 0, tooth4 x20, tooth5 0
+        transform = SE3.Trans(output_center) * SE3.Rt(SO3.RPY([0, 0, 0], unit="deg"), [0, 0, 0]) * SE3.Trans(-input_center)
         transform = transform.inv()
         nparr = affine_transform(nparr, transform.A, order=0, output_shape=output_shape)
         original_shape = np.array(nparr.shape)

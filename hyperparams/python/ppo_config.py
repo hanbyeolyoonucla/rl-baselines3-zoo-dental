@@ -86,7 +86,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
 
         total_concat_size = 0
         for key, subspace in observation_space.spaces.items():
-            if key == 'states':
+            if key == 'voxel':
                 extractors[key] = CustomCNN3D(subspace, features_dim=cnn_output_dim)
                 total_concat_size += cnn_output_dim
             else:
@@ -105,7 +105,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         return th.cat(encoded_tensor_list, dim=1)
 
 hyperparams = {
-    "DentalEnv-v0": dict(
+    "DentalEnv6D-v0": dict(
         # env_wrapper=[{"gymnasium.wrappers.TimeLimit": {"max_episode_steps": 100}}],
         # normalize=True,
         n_envs=4,

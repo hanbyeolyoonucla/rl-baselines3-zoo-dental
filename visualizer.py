@@ -22,13 +22,14 @@ time_steps = len(demons)
 # trained policy
 policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
                                      action_space=env.action_space,
-                                     lr_schedule=get_schedule_fn(0.0003),
+                                     lr_schedule=get_schedule_fn(0.003),
                                      **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
-policy.load('dental_env/demonstrations/bc_policy')
+policy = policy.load('dental_env/demonstrations/bc_policy_2')
 
 for itr in range(time_steps-1):
     # action = env.action_space.sample()
     action, _ = policy.predict(state, deterministic=True)
+    action = action - 1
     print(action)
     # action = demons.iloc[itr+1].to_numpy() - demons.iloc[itr].to_numpy()
     # action[3:] = action[3:]//3

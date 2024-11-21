@@ -24,7 +24,7 @@ class CustomCNN3D(BaseFeaturesExtractor):
     def __init__(
         self,
         observation_space: gym.Space,
-        features_dim: int = 1024,
+        features_dim: int = 256,
         # normalized_image: bool = False,
         normalize_image: bool = False,
     ) -> None:
@@ -77,7 +77,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
     def __init__(
         self,
         observation_space: spaces.Dict,
-        cnn_output_dim: int = 1024,
+        cnn_output_dim: int = 256,
         # normalized_image: bool = False,
     ) -> None:
         super().__init__(observation_space, features_dim=1)
@@ -125,7 +125,7 @@ hyperparams = {
         policy_kwargs=dict(
             activation_fn=nn.ReLU,
             features_extractor_class=CustomCombinedExtractor,
-            features_extractor_kwargs=dict(cnn_output_dim=1024),
+            features_extractor_kwargs=dict(cnn_output_dim=256),
             net_arch=dict(pi=[128,128], vf=[128,128]),
             normalize_images=False
         ),

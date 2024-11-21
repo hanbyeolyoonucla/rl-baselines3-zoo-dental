@@ -155,7 +155,7 @@ class DentalEnv6D(gym.Env):
 
     def step(self, action):
         # action
-        action = action - 1  # [0 1 2] to [-1 0 1]
+        # action = action - 1  # [0 1 2] to [-1 0 1]
         self._agent_location = np.clip(
             self._agent_location + action[:3],
             a_min=0 + self._coffset, a_max=np.array(self._state_init.shape) - np.ones(3)*self._coffset

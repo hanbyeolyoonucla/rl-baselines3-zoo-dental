@@ -36,23 +36,20 @@ env = gym.make("DentalEnv6D-v0", max_episode_steps=800,
                render_mode="rgb_array", down_sample=10, tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
 policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
                                      action_space=env.action_space,
-                                     lr_schedule=get_schedule_fn(0.0003),
+                                     lr_schedule=get_schedule_fn(0.005),
                                      **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
 rng = np.random.default_rng(0)
 bc_trainer = bc.BC(
     observation_space=env.observation_space,
     action_space=env.action_space,
+    batch_size=512,
     demonstrations=transitions,
-    policy=policy,
+    policy=policy.load('dental_env/demonstrations/bc_policy'),
     rng=rng,
 )
-# print(bc_trainer.policy.state_dict())
-# reward_before_training, _ = evaluate_policy(bc_trainer.policy, env, 1)
-# print(f"Reward before training: {reward_before_training}")
 
-bc_trainer.train(n_epochs=20)
-reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 1)
-print(f"Reward after training: {reward_after_training}")
+bc_trainer.train(n_epochs=500, log_interval=10)
+# reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 1)
+# print(f"Reward after training: {reward_after_training}")
 
-# print(bc_trainer.policy.state_dict())
-bc_trainer.policy.save('dental_env/demonstrations/bc_policy')
+bc_trainer.policy.save('dental_env/demonstrations/bc_policy_2')

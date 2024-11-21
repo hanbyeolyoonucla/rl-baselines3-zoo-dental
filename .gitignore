@@ -41,3 +41,4 @@ ENV/
 env.bak/
 venv.bak/
 dental_env/labels_augmented/
+dental_env/demos_augmented/

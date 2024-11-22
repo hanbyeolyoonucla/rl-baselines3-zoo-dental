@@ -22,7 +22,7 @@ with h5py.File('dental_env/demonstrations/train_dataset.hdf5', 'r') as f:
                        burr_pos=f[demo]['obs']['burr_pos'][:],
                        burr_rot=f[demo]['obs']['burr_rot'][:])
         trajectory = TrajectoryWithRew(obs=DictObs(dictobs),
-                                       acts=f[demo]['acts'][:].astype(int)+1,
+                                       acts=f[demo]['acts'][:],  # .astype(int)+1
                                        infos=f[demo]['info']['is_success'][:],
                                        rews=f[demo]['rews'][:],
                                        terminal=True)
@@ -44,12 +44,12 @@ bc_trainer = bc.BC(
     action_space=env.action_space,
     batch_size=512,
     demonstrations=transitions,
-    policy=policy.load('dental_env/demonstrations/bc_policy'),
+    policy=policy.load('dental_env/demonstrations/bc_policy_ct_action_4'),  #
     rng=rng,
 )
 
-bc_trainer.train(n_epochs=500, log_interval=10)
+bc_trainer.train(n_epochs=1000, log_interval=10)
 # reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 1)
 # print(f"Reward after training: {reward_after_training}")
 
-bc_trainer.policy.save('dental_env/demonstrations/bc_policy_2')
+bc_trainer.policy.save('dental_env/demonstrations/bc_policy_ct_action_5')

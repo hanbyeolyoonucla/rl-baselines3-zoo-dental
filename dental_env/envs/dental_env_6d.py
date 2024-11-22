@@ -93,8 +93,9 @@ class DentalEnv6D(gym.Env):
             }
         )
 
+        self.action_space = spaces.Box(low=-1, high=1, shape=(6,), dtype=np.float64)
         # self.action_space = spaces.Box(low=-1, high=1, shape=(6,), dtype=np.int32)
-        self.action_space = spaces.MultiDiscrete([3, 3, 3, 3, 3, 3])
+        # self.action_space = spaces.MultiDiscrete([3, 3, 3, 3, 3, 3])
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode

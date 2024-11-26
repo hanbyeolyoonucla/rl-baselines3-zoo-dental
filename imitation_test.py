@@ -44,7 +44,7 @@ bc_trainer = bc.BC(
     action_space=env.action_space,
     batch_size=512,
     demonstrations=transitions,
-    policy=policy.load('dental_env/demonstrations/bc_policy_ct_action_4'),  #
+    policy=policy.load('dental_env/demonstrations/bc_policy_ct_action_6'),  #
     rng=rng,
 )
 
@@ -52,4 +52,4 @@ bc_trainer.train(n_epochs=1000, log_interval=10)
 # reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 1)
 # print(f"Reward after training: {reward_after_training}")
 
-bc_trainer.policy.save('dental_env/demonstrations/bc_policy_ct_action_5')
+bc_trainer.policy.save('dental_env/demonstrations/bc_policy_ct_action_7')

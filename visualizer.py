@@ -8,7 +8,7 @@ from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
 from hyperparams.python.ppo_config import hyperparams
 
-tnum = 2
+tnum = 3
 # env = gym.make("DentalEnv-v0", render_mode="human", max_episode_steps=1024, down_sample=30)
 # env = gym.make("DentalEnv5D-v1", render_mode="human", max_episode_steps=1024, down_sample=10)
 env = gym.make("DentalEnv6D-v0", render_mode="human", max_episode_steps=1000, down_sample=10,
@@ -24,7 +24,7 @@ policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
                                      action_space=env.action_space,
                                      lr_schedule=get_schedule_fn(0.003),
                                      **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
-policy = policy.load('dental_env/demonstrations/bc_policy_ct_action_3')
+policy = policy.load('dental_env/demonstrations/bc_policy_ct_action_7')
 
 for itr in range(time_steps-1):
     # action = env.action_space.sample()

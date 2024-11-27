@@ -220,9 +220,10 @@ class IBRL(OffPolicyAlgorithm):
                 # Select action according to policy
                 # TODO: select action according to IBRL policy
                 # Select action according to policy and add clipped noise
-                noise = replay_data.actions.clone().data.normal_(0, self.target_policy_noise)
-                noise = noise.clamp(-self.target_noise_clip, self.target_noise_clip)
-                rl_next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
+                # noise = replay_data.actions.clone().data.normal_(0, self.target_policy_noise)
+                # noise = noise.clamp(-self.target_noise_clip, self.target_noise_clip)
+                # rl_next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
+                rl_next_actions = self.actor_target(replay_data.next_observations)  # without noise (original ibrl implementation)
                 bc_next_actions, _, _ = self.policy.bc_policy.forward(replay_data.next_observations, deterministic=True)
                 rl_bc_next_actions = th.stack([rl_next_actions, bc_next_actions], dim=1)
                 bsize, num_actions, _ = rl_bc_next_actions.size()
@@ -237,7 +238,7 @@ class IBRL(OffPolicyAlgorithm):
                 # TODO: epsilon greedy action
                 greedy_action_idx = rl_bc_next_q_values.argmax(dim=1)
                 greedy_action = rl_bc_next_actions[range(bsize), greedy_action_idx]
-                next_q_values = rl_bc_next_q_values[:, greedy_action_idx]
+                next_q_values = rl_bc_next_q_values[range(bsize), greedy_action_idx].view(-1, 1)
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
             # Get current Q-values estimates for each critic network

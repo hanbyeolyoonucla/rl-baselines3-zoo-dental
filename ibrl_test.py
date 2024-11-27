@@ -8,7 +8,7 @@ from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
 from hyperparams.python.ppo_config import hyperparams
 from stable_baselines3 import SAC
-from ibrl import IBRL
+from ibrl_sac import IBRL
 
 tnum = 5
 env = gym.make("DentalEnv6D-v0", render_mode=None, max_episode_steps=1000, down_sample=10,

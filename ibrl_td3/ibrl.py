@@ -12,22 +12,24 @@ from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, DictReplayBufferSamples
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
-from ibrl.policies import Actor, MlpPolicy, CnnPolicy, MultiInputPolicy, IBRLPolicy
+from ibrl_sac.policies import Actor, MlpPolicy, CnnPolicy, MultiInputPolicy, IBRLPolicy
 
 SelfIBRL = TypeVar("SelfIBRL", bound="IBRL")
 
 class IBRL(OffPolicyAlgorithm):
     """
     Imitation Bootstrapped Reinforcement Learning (IBRL)
-    Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor,
     This implementation borrows code from original implementation (https://github.com/hengyuan-hu/ibrl)
     from Stable Baselines3 (https://github.com/DLR-RM/stable-baselines3)
     Paper: https://arxiv.org/abs/2311.02198
 
-    Note: we use double q target and not value target as discussed
-    in https://github.com/hill-a/stable-baselines/issues/270
+    Twin Delayed DDPG (TD3)
+    Addressing Function Approximation Error in Actor-Critic Methods.
+    Original implementation: https://github.com/sfujim/TD3
+    Paper: https://arxiv.org/abs/1802.09477
+    Introduction to TD3: https://spinningup.openai.com/en/latest/algorithms/td3.html
 
-    :param policy: The policy model to use (MlpPolicy, CnnPolicy, ...)
+     :param policy: The policy model to use (MlpPolicy, CnnPolicy, ...)
     :param env: The environment to learn from (if registered in Gym, can be str)
     :param learning_rate: learning rate for adam optimizer,
         the same learning rate will be used for all networks (Q-Values, Actor and Value function)
@@ -50,18 +52,11 @@ class IBRL(OffPolicyAlgorithm):
     :param optimize_memory_usage: Enable a memory efficient variant of the replay buffer
         at a cost of more complexity.
         See https://github.com/DLR-RM/stable-baselines3/issues/37#issuecomment-637501195
-    :param ent_coef: Entropy regularization coefficient. (Equivalent to
-        inverse of reward scale in the original SAC paper.)  Controlling exploration/exploitation trade-off.
-        Set it to 'auto' to learn it automatically (and 'auto_0.1' for using 0.1 as initial value)
-    :param target_update_interval: update the target network every ``target_network_update_freq``
-        gradient steps.
-    :param target_entropy: target entropy when learning ``ent_coef`` (``ent_coef = 'auto'``)
-    :param use_sde: Whether to use generalized State Dependent Exploration (gSDE)
-        instead of action noise exploration (default: False)
-    :param sde_sample_freq: Sample a new noise matrix every n steps when using gSDE
-        Default: -1 (only sample at the beginning of the rollout)
-    :param use_sde_at_warmup: Whether to use gSDE instead of uniform sampling
-        during the warm up phase (before learning starts)
+    :param policy_delay: Policy and target networks will only be updated once every policy_delay steps
+        per training steps. The Q values will be updated policy_delay more often (update every training step).
+    :param target_policy_noise: Standard deviation of Gaussian noise added to target policy
+        (smoothing noise)
+    :param target_noise_clip: Limit for absolute value of target policy smoothing noise.
     :param stats_window_size: Window size for the rollout logging, specifying the number of episodes to average
         the reported success rate, mean episode length, and mean reward over
     :param tensorboard_log: the log location for tensorboard (if None, no logging)
@@ -89,7 +84,7 @@ class IBRL(OffPolicyAlgorithm):
             self,
             policy: Union[str, type[IBRLPolicy]],
             env: Union[GymEnv, str],
-            learning_rate: Union[float, Schedule] = 3e-4,
+            learning_rate: Union[float, Schedule] = 1e-3,
             buffer_size: int = 1_000_000,  # 1e6
             bc_buffer_size: int = 10_000,
             learning_starts: int = 100,
@@ -104,12 +99,9 @@ class IBRL(OffPolicyAlgorithm):
             replay_buffer_kwargs: Optional[dict[str, Any]] = None,
             bc_replay_buffer_path: str = 'dental_env/demonstrations/train_dataset.hdf5',
             optimize_memory_usage: bool = False,
-            ent_coef: Union[str, float] = "auto",
-            target_update_interval: int = 1,
-            target_entropy: Union[str, float] = "auto",
-            use_sde: bool = False,
-            sde_sample_freq: int = -1,
-            use_sde_at_warmup: bool = False,
+            policy_delay: int = 2,
+            target_policy_noise: float = 0.2,
+            target_noise_clip: float = 0.5,
             stats_window_size: int = 100,
             tensorboard_log: Optional[str] = None,
             policy_kwargs: Optional[dict[str, Any]] = None,
@@ -129,7 +121,7 @@ class IBRL(OffPolicyAlgorithm):
             gamma,
             train_freq,
             gradient_steps,
-            action_noise,
+            action_noise=action_noise,
             replay_buffer_class=replay_buffer_class,
             replay_buffer_kwargs=replay_buffer_kwargs,
             policy_kwargs=policy_kwargs,
@@ -138,21 +130,15 @@ class IBRL(OffPolicyAlgorithm):
             verbose=verbose,
             device=device,
             seed=seed,
-            use_sde=use_sde,
-            sde_sample_freq=sde_sample_freq,
-            use_sde_at_warmup=use_sde_at_warmup,
+            sde_support=False,
             optimize_memory_usage=optimize_memory_usage,
             supported_action_spaces=(spaces.Box,),
             support_multi_env=True,
         )
 
-        self.target_entropy = target_entropy
-        self.log_ent_coef = None  # type: Optional[th.Tensor]
-        # Entropy coefficient / Entropy temperature
-        # Inverse of the reward scale
-        self.ent_coef = ent_coef
-        self.target_update_interval = target_update_interval
-        self.ent_coef_optimizer: Optional[th.optim.Adam] = None
+        self.policy_delay = policy_delay
+        self.target_noise_clip = target_noise_clip
+        self.target_policy_noise = target_policy_noise
 
         # behavior cloning demonstration dataset buffer
         self.rl_bc_batch_ratio = rl_bc_batch_ratio
@@ -193,36 +179,10 @@ class IBRL(OffPolicyAlgorithm):
 
         self._create_aliases()
         # Running mean and running var
-        self.batch_norm_stats = get_parameters_by_name(self.critic, ["running_"])
-        self.batch_norm_stats_target = get_parameters_by_name(self.critic_target, ["running_"])
-        # Target entropy is used when learning the entropy coefficient
-        if self.target_entropy == "auto":
-            # automatically set target entropy if needed
-            self.target_entropy = float(-np.prod(self.env.action_space.shape).astype(np.float32))  # type: ignore
-        else:
-            # Force conversion
-            # this will also throw an error for unexpected string
-            self.target_entropy = float(self.target_entropy)
-
-        # The entropy coefficient or entropy can be learned automatically
-        # see Automating Entropy Adjustment for Maximum Entropy RL section
-        # of https://arxiv.org/abs/1812.05905
-        if isinstance(self.ent_coef, str) and self.ent_coef.startswith("auto"):
-            # Default initial value of ent_coef when learned
-            init_value = 1.0
-            if "_" in self.ent_coef:
-                init_value = float(self.ent_coef.split("_")[1])
-                assert init_value > 0.0, "The initial value of ent_coef must be greater than 0"
-
-            # Note: we optimize the log of the entropy coeff which is slightly different from the paper
-            # as discussed in https://github.com/rail-berkeley/softlearning/issues/37
-            self.log_ent_coef = th.log(th.ones(1, device=self.device) * init_value).requires_grad_(True)
-            self.ent_coef_optimizer = th.optim.Adam([self.log_ent_coef], lr=self.lr_schedule(1))
-        else:
-            # Force conversion to float
-            # this will throw an error if a malformed string (different from 'auto')
-            # is passed
-            self.ent_coef_tensor = th.tensor(float(self.ent_coef), device=self.device)
+        self.actor_batch_norm_stats = get_parameters_by_name(self.actor, ["running_"])
+        self.critic_batch_norm_stats = get_parameters_by_name(self.critic, ["running_"])
+        self.actor_batch_norm_stats_target = get_parameters_by_name(self.actor_target, ["running_"])
+        self.critic_batch_norm_stats_target = get_parameters_by_name(self.critic_target, ["running_"])
 
     def _create_aliases(self) -> None:
         self.actor = self.policy.actor
@@ -230,21 +190,16 @@ class IBRL(OffPolicyAlgorithm):
         self.critic = self.policy.critic
         self.critic_target = self.policy.critic_target
 
-    def train(self, gradient_steps: int, batch_size: int = 64) -> None:
+    def train(self, gradient_steps: int, batch_size: int = 100) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
-        # Update optimizers learning rate
-        optimizers = [self.actor.optimizer, self.critic.optimizer]
-        if self.ent_coef_optimizer is not None:
-            optimizers += [self.ent_coef_optimizer]
 
         # Update learning rate according to lr schedule
-        self._update_learning_rate(optimizers)
+        self._update_learning_rate([self.actor.optimizer, self.critic.optimizer])
 
-        ent_coef_losses, ent_coefs = [], []
         actor_losses, critic_losses = [], []
-
-        for gradient_step in range(gradient_steps):
+        for _ in range(gradient_steps):
+            self._n_updates += 1
             # Sample replay buffer
             rl_batch_size = int(self.rl_bc_batch_ratio * batch_size)
             bc_batch_size = batch_size - rl_batch_size
@@ -261,61 +216,28 @@ class IBRL(OffPolicyAlgorithm):
                 rewards=th.cat([rl_replay_data.rewards, bc_replay_data.rewards], dim=0),
             )
 
-            # We need to sample because `log_std` may have changed between two gradient steps
-            if self.use_sde:
-                self.actor.reset_noise()
-
-            # Action by the current actor for the sampled state
-            # TODO: action by the current actor - current implementation should be fine
-            actions_pi, log_prob = self.actor.action_log_prob(replay_data.observations)
-            log_prob = log_prob.reshape(-1, 1)
-
-            ent_coef_loss = None
-            if self.ent_coef_optimizer is not None and self.log_ent_coef is not None:
-                # Important: detach the variable from the graph
-                # so we don't change it with other losses
-                # see https://github.com/rail-berkeley/softlearning/issues/60
-                ent_coef = th.exp(self.log_ent_coef.detach())
-                ent_coef_loss = -(self.log_ent_coef * (log_prob + self.target_entropy).detach()).mean()
-                ent_coef_losses.append(ent_coef_loss.item())
-            else:
-                ent_coef = self.ent_coef_tensor
-
-            ent_coefs.append(ent_coef.item())
-
-            # Optimize entropy coefficient, also called
-            # entropy temperature or alpha in the paper
-            if ent_coef_loss is not None and self.ent_coef_optimizer is not None:
-                self.ent_coef_optimizer.zero_grad()
-                ent_coef_loss.backward()
-                self.ent_coef_optimizer.step()
-
             with th.no_grad():
                 # Select action according to policy
                 # TODO: select action according to IBRL policy
-                # target actor sample action, bc actor action,
-                # next_actions, next_log_prob = self.actor.action_log_prob(replay_data.next_observations)
-                rl_next_actions, next_log_prob = self.actor_target.action_log_prob(replay_data.next_observations)
+                # Select action according to policy and add clipped noise
+                noise = replay_data.actions.clone().data.normal_(0, self.target_policy_noise)
+                noise = noise.clamp(-self.target_noise_clip, self.target_noise_clip)
+                rl_next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
                 bc_next_actions, _, _ = self.policy.bc_policy.forward(replay_data.next_observations, deterministic=True)
                 rl_bc_next_actions = th.stack([rl_next_actions, bc_next_actions], dim=1)
                 bsize, num_actions, _ = rl_bc_next_actions.size()
 
                 # Compute the next Q values: min over all critics targets
-                # next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
-                # next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
                 rl_next_q_values = th.cat(self.critic_target(replay_data.next_observations, rl_next_actions), dim=1)
                 rl_next_q_values, _ = th.min(rl_next_q_values, dim=1, keepdim=True)
                 bc_next_q_values = th.cat(self.critic_target(replay_data.next_observations, bc_next_actions), dim=1)
                 bc_next_q_values, _ = th.min(bc_next_q_values, dim=1, keepdim=True)
                 rl_bc_next_q_values = th.cat((rl_next_q_values, bc_next_q_values), dim=1)
+
                 # TODO: epsilon greedy action
                 greedy_action_idx = rl_bc_next_q_values.argmax(dim=1)
                 greedy_action = rl_bc_next_actions[range(bsize), greedy_action_idx]
                 next_q_values = rl_bc_next_q_values[:, greedy_action_idx]
-
-                # add entropy term
-                next_q_values = next_q_values - ent_coef * next_log_prob.reshape(-1, 1) * (1-greedy_action_idx).reshape(-1, 1)
-                # td error + entropy term
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
             # Get current Q-values estimates for each critic network
@@ -323,42 +245,37 @@ class IBRL(OffPolicyAlgorithm):
             current_q_values = self.critic(replay_data.observations, replay_data.actions)
 
             # Compute critic loss
-            critic_loss = 0.5 * sum(F.mse_loss(current_q, target_q_values) for current_q in current_q_values)
-            assert isinstance(critic_loss, th.Tensor)  # for type checker
-            critic_losses.append(critic_loss.item())  # type: ignore[union-attr]
+            critic_loss = sum(F.mse_loss(current_q, target_q_values) for current_q in current_q_values)
+            assert isinstance(critic_loss, th.Tensor)
+            critic_losses.append(critic_loss.item())
 
             # Optimize the critic
             self.critic.optimizer.zero_grad()
             critic_loss.backward()
             self.critic.optimizer.step()
 
-            # Compute actor loss
-            # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
-            # Min over all critic networks
-            q_values_pi = th.cat(self.critic(replay_data.observations, actions_pi), dim=1)
-            min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-            actor_loss = (ent_coef * log_prob - min_qf_pi).mean()
-            actor_losses.append(actor_loss.item())
+            # Delayed policy updates
+            if self._n_updates % self.policy_delay == 0:
+                # Compute actor loss
+                actor_loss = -self.critic.q1_forward(replay_data.observations,
+                                                     self.actor(replay_data.observations)).mean()
+                actor_losses.append(actor_loss.item())
 
-            # Optimize the actor
-            self.actor.optimizer.zero_grad()
-            actor_loss.backward()
-            self.actor.optimizer.step()
+                # Optimize the actor
+                self.actor.optimizer.zero_grad()
+                actor_loss.backward()
+                self.actor.optimizer.step()
 
-            # Update target networks
-            if gradient_step % self.target_update_interval == 0:
                 polyak_update(self.critic.parameters(), self.critic_target.parameters(), self.tau)
                 polyak_update(self.actor.parameters(), self.actor_target.parameters(), self.tau)
                 # Copy running stats, see GH issue #996
-                polyak_update(self.batch_norm_stats, self.batch_norm_stats_target, 1.0)
-        self._n_updates += gradient_steps
+                polyak_update(self.critic_batch_norm_stats, self.critic_batch_norm_stats_target, 1.0)
+                polyak_update(self.actor_batch_norm_stats, self.actor_batch_norm_stats_target, 1.0)
 
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
-        self.logger.record("train/ent_coef", np.mean(ent_coefs))
-        self.logger.record("train/actor_loss", np.mean(actor_losses))
+        if len(actor_losses) > 0:
+            self.logger.record("train/actor_loss", np.mean(actor_losses))
         self.logger.record("train/critic_loss", np.mean(critic_losses))
-        if len(ent_coef_losses) > 0:
-            self.logger.record("train/ent_coef_loss", np.mean(ent_coef_losses))
 
     def learn(
             self: SelfIBRL,
@@ -379,13 +296,8 @@ class IBRL(OffPolicyAlgorithm):
         )
 
     def _excluded_save_params(self) -> list[str]:
-        return super()._excluded_save_params() + ["actor", "critic", "critic_target"]  # noqa: RUF005
+        return super()._excluded_save_params() + ["actor", "critic", "actor_target", "critic_target"]  # noqa: RUF005
 
     def _get_torch_save_params(self) -> tuple[list[str], list[str]]:
         state_dicts = ["policy", "actor.optimizer", "critic.optimizer"]
-        if self.ent_coef_optimizer is not None:
-            saved_pytorch_variables = ["log_ent_coef"]
-            state_dicts.append("ent_coef_optimizer")
-        else:
-            saved_pytorch_variables = ["ent_coef_tensor"]
-        return state_dicts, saved_pytorch_variables
+        return state_dicts, []

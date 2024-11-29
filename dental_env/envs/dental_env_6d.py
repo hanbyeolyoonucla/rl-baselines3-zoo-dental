@@ -400,6 +400,6 @@ class DentalEnv6D(gym.Env):
             self.window.close()
             self.window = None
 
-        if self.window_col is not None and self.render_mode == "human":
+        if self._col_check and self.window_col is not None and self.render_mode == "human":
             self.window_col.close()
             self.window_col = None

@@ -14,7 +14,7 @@ from wandb.integration.sb3 import WandbCallback
 
 config = {
     "policy_type": "MultiInputPolicy",
-    "total_timesteps": 10_000,
+    "total_timesteps": 4_000,
 }
 run = wandb.init(
     project="dental_ibrl",
@@ -29,9 +29,11 @@ env = gym.make("DentalEnv6D-v0", render_mode=None, max_episode_steps=1000, down_
                tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
 
 model = IBRL(config["policy_type"], env, verbose=1,
-             buffer_size=10_000,
+             buffer_size=3_000,
              bc_buffer_size=1_504,
              rl_bc_batch_ratio=0.7,
+             learning_starts=0,
+             train_freq=100,
              bc_replay_buffer_path=f'dental_env/demonstrations/train_dataset.hdf5',
              tensorboard_log=f"runs/{run.id}")  #
 model.learn(total_timesteps=config["total_timesteps"],

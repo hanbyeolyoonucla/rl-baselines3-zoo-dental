@@ -100,6 +100,7 @@ class DentalEnv6D(gym.Env):
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
         self.window = None
+        self.window_col = None
         self.clock = None
 
     def _get_obs(self):
@@ -269,7 +270,7 @@ class DentalEnv6D(gym.Env):
             ctr = self.window.get_view_control()
             ctr.rotate(0, -200)
 
-            if self._col_check:
+            if self._col_check and self.window_col is None:
                 self.window_col = o3d.visualization.Visualizer()
                 self.window_col.create_window(window_name='Cut Path Episode - Collision Status',
                                               width=1080, height=1080, left=1130, top=50, visible=True)
@@ -400,6 +401,6 @@ class DentalEnv6D(gym.Env):
             self.window.close()
             self.window = None
 
-        if self._col_check and self.window_col is not None and self.render_mode == "human":
+        if self.window_col is not None and self.render_mode == "human":
             self.window_col.close()
             self.window_col = None

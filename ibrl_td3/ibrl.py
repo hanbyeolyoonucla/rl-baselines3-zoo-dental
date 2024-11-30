@@ -93,6 +93,8 @@ class IBRL(OffPolicyAlgorithm):
             tau: float = 0.005,
             gamma: float = 0.99,
             train_freq: Union[int, tuple[int, str]] = 1,
+            model_save_freq: int = 10,
+            model_save_path: str = f'models/',
             gradient_steps: int = 1,
             action_noise: Optional[ActionNoise] = None,
             replay_buffer_class: Optional[type[ReplayBuffer]] = None,
@@ -144,6 +146,10 @@ class IBRL(OffPolicyAlgorithm):
         self.rl_bc_batch_ratio = rl_bc_batch_ratio
         self.bc_buffer_size = bc_buffer_size
         self.bc_replay_buffer_path = bc_replay_buffer_path
+
+        # model save freq
+        self.model_save_freq = model_save_freq
+        self.model_save_path = model_save_path
 
         if _init_setup_model:
             self._setup_model()
@@ -272,7 +278,8 @@ class IBRL(OffPolicyAlgorithm):
                 # Copy running stats, see GH issue #996
                 polyak_update(self.critic_batch_norm_stats, self.critic_batch_norm_stats_target, 1.0)
                 polyak_update(self.actor_batch_norm_stats, self.actor_batch_norm_stats_target, 1.0)
-
+            if self._n_updates % self.model_save_freq == 0:
+                self.save(self.model_save_path+f'_{self._n_updates}')
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         if len(actor_losses) > 0:
             self.logger.record("train/actor_loss", np.mean(actor_losses))

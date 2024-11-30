@@ -33,7 +33,9 @@ model = IBRL(config["policy_type"], env, verbose=1,
              bc_buffer_size=1_504,
              rl_bc_batch_ratio=0.7,
              learning_starts=0,
-             train_freq=100,
+             train_freq=100,  # train every 100 rollout
+             model_save_freq=10,  # save every 10 train (update)
+             model_save_path=f'models/{run.id}',
              bc_replay_buffer_path=f'dental_env/demonstrations/train_dataset.hdf5',
              tensorboard_log=f"runs/{run.id}")  #
 model.learn(total_timesteps=config["total_timesteps"],
@@ -45,6 +47,7 @@ model.learn(total_timesteps=config["total_timesteps"],
             #     verbose=2,
             # )
             )
+model.save(f'models/{run.id}_v1')
 run.finish()
 
 vec_env = model.get_env()

@@ -4,11 +4,12 @@ import torch
 import pandas as pd
 import numpy as np
 import h5py
+from gymnasium.wrappers import TransformReward
 
 
 tnums = [2, 3, 4, 5]
 
-with h5py.File('dental_env/demonstrations/train_dataset.hdf5', 'w') as f:
+with h5py.File('dental_env/demonstrations/train_dataset_log_reward.hdf5', 'w') as f:
 
     for tnum in tnums:
 
@@ -16,9 +17,10 @@ with h5py.File('dental_env/demonstrations/train_dataset.hdf5', 'w') as f:
         # env = gym.make("DentalEnv5D-v1", render_mode="human", max_episode_steps=1024, down_sample=10)
         env = gym.make("DentalEnv6D-v0", render_mode="human", max_episode_steps=1000, down_sample=10,
                        tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
+        env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
 
         obs, info = env.reset(seed=42)
-        voxel_size = obs['state'].shape
+        voxel_size = obs['voxel'].shape
 
         # test demonstration
         demons = pd.read_csv(f'dental_env/demonstrations/tooth_{tnum}_demonstration.csv')
@@ -34,7 +36,7 @@ with h5py.File('dental_env/demonstrations/train_dataset.hdf5', 'w') as f:
         info_success = f.create_dataset(f'tooth_{tnum}/info/is_success', (time_steps - 1,), dtype=int)
         rews = f.create_dataset(f'tooth_{tnum}/rews', (time_steps - 1,), dtype=float)
 
-        obs_voxel[0] = obs['state']
+        obs_voxel[0] = obs['voxel']
         obs_pos[0] = obs['burr_pos']
         obs_rot[0] = obs['burr_rot']
         for itr in range(time_steps-1):
@@ -43,7 +45,7 @@ with h5py.File('dental_env/demonstrations/train_dataset.hdf5', 'w') as f:
             action[3:] = action[3:]//3
             obs, reward, terminated, truncated, info = env.step(action)
             # save data
-            obs_voxel[itr+1] = obs['state']
+            obs_voxel[itr+1] = obs['voxel']
             obs_pos[itr+1] = obs['burr_pos']
             obs_rot[itr+1] = obs['burr_rot']
             actions[itr] = action

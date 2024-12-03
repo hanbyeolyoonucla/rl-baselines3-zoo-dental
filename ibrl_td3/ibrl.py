@@ -93,7 +93,7 @@ class IBRL(OffPolicyAlgorithm):
             tau: float = 0.005,
             gamma: float = 0.99,
             train_freq: Union[int, tuple[int, str]] = 1,
-            model_save_freq: int = 10,
+            model_save_freq: int = 10_000,
             model_save_path: str = f'models/',
             gradient_steps: int = 1,
             action_noise: Optional[ActionNoise] = None,

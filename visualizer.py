@@ -8,14 +8,12 @@ from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
 from hyperparams.python.ppo_config import hyperparams
 from gymnasium.wrappers import TransformReward
+from ibrl_td3.ibrl import IBRL
 
-tnum = 3
-# env = gym.make("DentalEnv-v0", render_mode="human", max_episode_steps=1024, down_sample=30)
-# env = gym.make("DentalEnv5D-v1", render_mode="human", max_episode_steps=1024, down_sample=10)
+tnum = 5
 env = gym.make("DentalEnv6D-v0", render_mode="human", max_episode_steps=1000, down_sample=10,
                tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
 env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
-state, info = env.reset(seed=42)
 
 # test demonstration
 demons = pd.read_csv(f'dental_env/demonstrations/tooth_{tnum}_demonstration.csv')
@@ -28,18 +26,20 @@ policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
                                      **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
 policy = policy.load('dental_env/demonstrations/bc_policy_ct_action_7')
 
+#trained ibrl
+policy = IBRL.load(f'models/s01yrbci_2200.zip')
+
+state, info = env.reset(seed=42)
 for itr in range(time_steps-1):
     # action = env.action_space.sample()
     action, _ = policy.predict(state, deterministic=True)
-    # action = action - 1
-    # print(action)
     # action = demons.iloc[itr+1].to_numpy() - demons.iloc[itr].to_numpy()
     # action[3:] = action[3:]//3
     state, reward, terminated, truncated, info = env.step(action)
-    print(reward)
+    # print(action)
+    # print(reward)
 
     # if terminated or truncated:
     #     env.close()
     #     observation, info = env.reset()
-
 env.close()

@@ -107,8 +107,15 @@ class DentalEnv6D(gym.Env):
         return {"burr_pos": self._agent_location_normalized, "burr_rot": self._agent_rotation, "voxel": self._states}
 
     def _get_info(self):
+        curr_num_decay = np.sum(self._states[self._state_label['decay']])
+        curr_num_enamel = np.sum(self._states[self._state_label['enamel']])
+        curr_num_dentin = np.sum(self._states[self._state_label['dentin']])
         return {
-            "decay_remained": np.sum(self._states[self._state_label['decay']]),
+            "decay_remained": curr_num_decay,
+            "decay_removal": (self._init_num_decay - curr_num_decay) / self._init_num_decay,
+            "enamel_damage": (self._init_num_enamel - curr_num_enamel) / self._init_num_enamel,
+            "dentin_damage": (self._init_num_dentin - curr_num_dentin) / self._init_num_dentin,
+            "is_collision": self._collision,
             "is_success": np.sum(self._states[self._state_label['decay']]) == 0
         }
 
@@ -133,6 +140,11 @@ class DentalEnv6D(gym.Env):
         self._states[self._state_label['decay']] = self._state_init == self._state_label['decay']
         self._states[self._state_label['enamel']] = self._state_init == self._state_label['enamel']
         self._states[self._state_label['dentin']] = self._state_init == self._state_label['dentin']
+
+        # initial voxel counts
+        self._init_num_decay = np.sum(self._states[self._state_label['decay']])
+        self._init_num_enamel = np.sum(self._states[self._state_label['enamel']])
+        self._init_num_dentin = np.sum(self._states[self._state_label['dentin']])
 
         # burr initialization
         self._burr = self._burr_init.copy()

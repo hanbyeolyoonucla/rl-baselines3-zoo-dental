@@ -27,17 +27,33 @@ policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
 policy = policy.load('dental_env/demonstrations/bc_policy_ct_action_7')
 
 #trained ibrl
-policy = IBRL.load(f'models/s01yrbci_2200.zip')
+# policy = IBRL.load(f'models/s01yrbci_2200.zip')
 
 state, info = env.reset(seed=42)
+total_reward = 0
+total_collisions = 0
 for itr in range(time_steps-1):
     # action = env.action_space.sample()
     action, _ = policy.predict(state, deterministic=True)
     # action = demons.iloc[itr+1].to_numpy() - demons.iloc[itr].to_numpy()
     # action[3:] = action[3:]//3
     state, reward, terminated, truncated, info = env.step(action)
-    # print(action)
-    # print(reward)
+
+    total_reward = total_reward + reward
+    decay_removal = info['decay_removal']
+    enamel_damage = info['enamel_damage']
+    dentin_damage = info['dentin_damage']
+    total_collisions = total_collisions + info['is_collision']
+    success = info['is_success']
+
+    print(f'-------iteration: {itr}-------')
+    print(f'success: {success}')
+    print(f'total_reward: {total_reward}')
+    print(f'decay_removal: {decay_removal}')
+    print(f'enamel_damage: {enamel_damage}')
+    print(f'dentin_damage: {dentin_damage}')
+    print(f'total_collisions: {total_collisions}')
+
 
     # if terminated or truncated:
     #     env.close()

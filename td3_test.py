@@ -13,6 +13,7 @@ import wandb
 from wandb.integration.sb3 import WandbCallback
 from hyperparams.python.td3_config import hyperparams
 from stable_baselines3.common.noise import NormalActionNoise
+from gymnasium.wrappers import TransformReward
 
 config = {
     "policy_type": "MultiInputPolicy",
@@ -27,6 +28,7 @@ run = wandb.init(
 tnum = 5
 env = gym.make("DentalEnv6D-v0", render_mode=None, max_episode_steps=500, down_sample=10,
                tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
+env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
 
 model = TD3(config["policy_type"], env, verbose=1,
             buffer_size=10_000,

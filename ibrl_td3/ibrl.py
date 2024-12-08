@@ -12,7 +12,7 @@ from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, DictReplayBufferSamples
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
-from ibrl_sac.policies import Actor, MlpPolicy, CnnPolicy, MultiInputPolicy, IBRLPolicy
+from ibrl_td3.policies import Actor, MlpPolicy, CnnPolicy, MultiInputPolicy, IBRLPolicy
 
 SelfIBRL = TypeVar("SelfIBRL", bound="IBRL")
 

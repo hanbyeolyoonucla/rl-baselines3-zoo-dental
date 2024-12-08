@@ -185,8 +185,9 @@ class IBRLPolicy(BasePolicy):
         self.bc_policy = self.bc_policy.load(self.bc_policy_path)
 
         # actor
-        self.actor = self.make_actor(features_extractor=self.bc_policy.features_extractor)
-        self.actor_target = self.make_actor(features_extractor=self.bc_policy.features_extractor)
+        # self.actor = self.make_actor(features_extractor=hyperparams["DentalEnv6D-v0"]['policy_kwargs']['features_extractor_class'])
+        self.actor = self.make_actor(features_extractor=None)
+        self.actor_target = self.make_actor(features_extractor=None)
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor.optimizer = self.optimizer_class(
             self.actor.parameters(),
@@ -249,7 +250,7 @@ class IBRLPolicy(BasePolicy):
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
         # TODO: ibrl_sac with actor and ibrl_sac with actor target
-        rl_actions, _ = self.actor.action_log_prob(observation)
+        rl_actions = self.actor.forward(observation)
         bc_actions, _, _ = self.bc_policy.forward(observation, deterministic=deterministic)
         rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
         bsize, num_actions, _ = rl_bc_actions.size()

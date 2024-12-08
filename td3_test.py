@@ -17,7 +17,7 @@ from gymnasium.wrappers import TransformReward
 
 config = {
     "policy_type": "MultiInputPolicy",
-    "total_timesteps": 500_000,
+    "total_timesteps": 10_000,
 }
 run = wandb.init(
     project="dental_td3",
@@ -31,7 +31,7 @@ env = gym.make("DentalEnv6D-v0", render_mode=None, max_episode_steps=500, down_s
 env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
 
 model = TD3(config["policy_type"], env, verbose=1,
-            buffer_size=10_000,
+            buffer_size=5_000,
             learning_starts=500,
             batch_size=256,
             train_freq=1,  # train every 100 rollout
@@ -60,4 +60,5 @@ model.learn(total_timesteps=config["total_timesteps"],
             progress_bar=True,
             )
 model.save(f'models/td3_{run.id}_v1')
+model.save_replay_buffer(f'models/replay_buffer/td3_{run.id}_v1')
 run.finish()

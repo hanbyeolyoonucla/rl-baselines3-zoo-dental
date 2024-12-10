@@ -211,8 +211,10 @@ class DentalEnv6D(gym.Env):
         reward_decay_removal = np.sum(burr_decay_occupancy)
         reward_enamel_removal = np.sum(burr_enamel_occupancy)
         reward_dentin_removal = np.sum(burr_dentin_occupancy)
-        reward = 1000*reward_decay_removal - 10*reward_enamel_removal - 100*reward_dentin_removal - 1\
-                 - 100*self._collision
+        reward = (1000*reward_decay_removal
+                  - 10*reward_enamel_removal
+                  - 100*reward_dentin_removal
+                  - 100*self._collision)*0.001
         # reward = 1000*reward_decay_removal - 1*reward_enamel_removal - 1*reward_dentin_removal\
         #          - 1*self._collision
         # reward = reward_decay_removal

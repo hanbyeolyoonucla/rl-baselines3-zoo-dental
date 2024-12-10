@@ -38,7 +38,7 @@ config = dict(
     env_tnum=5,
     env_down_sample=10,
     env_reward="original",
-    env_use_log_reward=True
+    env_use_log_reward=False
 )
 
 # Initiate train logger (wandb)

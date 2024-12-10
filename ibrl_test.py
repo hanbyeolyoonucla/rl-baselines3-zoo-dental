@@ -23,11 +23,14 @@ config = dict(
     buffer_size=10_000,
     bc_buffer_size=1_504,
     learning_starts=500,
+    learning_rate=1e-3,
     batch_size=256,
     rl_bc_batch_ratio=0.5,
     train_freq=1,
     action_noise_mu=0,
     action_noise_std=0.1,
+    target_policy_noise=0.1,
+    target_policy_clip=0.3,
     policy_kwargs=dict(
                 activation_fn=nn.ReLU,
                 features_extractor_class=CustomCombinedExtractor,
@@ -65,12 +68,15 @@ if config["env_use_log_reward"]:
 
 # Define train model
 model = IBRL("MultiInputPolicy", env, verbose=1,
+             learning_rate=config["learning_rate"],
              buffer_size=config["buffer_size"],
              bc_buffer_size=config["bc_buffer_size"],
              batch_size=config["batch_size"],
              rl_bc_batch_ratio=config["rl_bc_batch_ratio"],
              learning_starts=config["learning_starts"],
              train_freq=config["train_freq"],  # train every 100 rollout
+             target_policy_noise=config["target_policy_noise"],
+             target_noise_clip=config["target_policy_clip"],
              model_save_freq=config['total_timesteps']//3,  # don't save
              model_save_path=f'D:/dental_RL_data/models/ibrl_{run.id}',
              bc_replay_buffer_path=f'dental_env/demonstrations/train_dataset_log_reward.hdf5',

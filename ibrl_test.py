@@ -19,7 +19,7 @@ import pickle
 
 # Define train configs
 config = dict(
-    total_timesteps=50_000,
+    total_timesteps=80_000,
     buffer_size=10_000,
     bc_buffer_size=1_504,
     learning_starts=500,
@@ -50,7 +50,7 @@ run = wandb.init(
 )
 
 # Save config pickle
-with open(f'models/configs/td3_{run.id}_v1.pkl', 'wb') as f:
+with open(f'models/configs/ibrl_{run.id}_v1.pkl', 'wb') as f:
     pickle.dump(config, f)
 
 # Define environment
@@ -64,7 +64,7 @@ if config["env_use_log_reward"]:
     env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
 
 # Define train model
-model = IBRL(config["policy_type"], env, verbose=1,
+model = IBRL("MultiInputPolicy", env, verbose=1,
              buffer_size=config["buffer_size"],
              bc_buffer_size=config["bc_buffer_size"],
              batch_size=config["batch_size"],

@@ -58,7 +58,21 @@ class Actor(BasePolicy):
         self.activation_fn = activation_fn
 
         action_dim = get_action_dim(self.action_space)
-        actor_net = create_mlp(features_dim, action_dim, net_arch, activation_fn, squash_output=True)
+        # actor_net = create_mlp(features_dim, action_dim, net_arch, activation_fn, squash_output=True)
+        if len(net_arch) > 0:
+            actor_net = [nn.Linear(features_dim, net_arch[0], bias=True), activation_fn()]
+        else:
+            actor_net = []
+
+        for idx in range(len(net_arch) - 1):
+            actor_net.append(nn.Linear(net_arch[idx], net_arch[idx + 1], bias=True))
+            actor_net.append(activation_fn())
+            actor_net.append(nn.Dropout(p=0.5, inplace=False))  # IBRL dropout
+
+        if action_dim > 0:
+            last_layer_dim = net_arch[-1] if len(net_arch) > 0 else features_dim
+            actor_net.append(nn.Linear(last_layer_dim, action_dim, bias=True))
+        actor_net.append(nn.Tanh())
         # Deterministic action
         self.mu = nn.Sequential(*actor_net)
 

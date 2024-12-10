@@ -7,7 +7,7 @@ from torch.nn import functional as F
 import h5py
 
 from stable_baselines3.common.buffers import ReplayBuffer, DictReplayBuffer
-from stable_baselines3.common.noise import ActionNoise
+from stable_baselines3.common.noise import ActionNoise, NormalActionNoise
 from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, DictReplayBufferSamples
@@ -96,7 +96,7 @@ class IBRL(OffPolicyAlgorithm):
             model_save_freq: int = 10_000,
             model_save_path: str = f'models/',
             gradient_steps: int = 1,
-            action_noise: Optional[ActionNoise] = None,
+            action_noise: Optional[ActionNoise] = NormalActionNoise(0*np.ones(6), 0.2*np.ones(6)),
             replay_buffer_class: Optional[type[ReplayBuffer]] = None,
             replay_buffer_kwargs: Optional[dict[str, Any]] = None,
             bc_replay_buffer_path: str = 'dental_env/demonstrations/train_dataset.hdf5',
@@ -249,10 +249,10 @@ class IBRL(OffPolicyAlgorithm):
                 # Select action according to policy
                 # TODO: select action according to IBRL policy
                 # Select action according to policy and add clipped noise
-                # noise = replay_data.actions.clone().data.normal_(0, self.target_policy_noise)
-                # noise = noise.clamp(-self.target_noise_clip, self.target_noise_clip)
-                # rl_next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
-                rl_next_actions = self.actor_target(replay_data.next_observations)  # without noise (original ibrl implementation)
+                noise = replay_data.actions.clone().data.normal_(0, self.target_policy_noise)
+                noise = noise.clamp(-self.target_noise_clip, self.target_noise_clip)
+                rl_next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
+                # rl_next_actions = self.actor_target(replay_data.next_observations)  # without noise
                 bc_next_actions, _, _ = self.policy.bc_policy.forward(replay_data.next_observations, deterministic=True)
                 rl_bc_next_actions = th.stack([rl_next_actions, bc_next_actions], dim=1)
                 bsize, num_actions, _ = rl_bc_next_actions.size()

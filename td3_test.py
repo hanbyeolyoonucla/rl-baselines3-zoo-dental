@@ -69,7 +69,7 @@ model = TD3("MultiInputPolicy", env, verbose=1,
             batch_size=config["batch_size"],
             train_freq=config["train_freq"],  # train every 100 rollout
             tensorboard_log=f"runs/td3_{run.id}",
-            action_noise=NormalActionNoise(config["action_noise_mu"]*np.ones(6), config["action_noise_mu"]*np.ones(6)),
+            action_noise=NormalActionNoise(config["action_noise_mu"]*np.ones(6), config["action_noise_std"]*np.ones(6)),
             policy_kwargs=config['policy_kwargs'])
 
 # Prefill replay buffer with demonstration dataset

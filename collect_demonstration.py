@@ -9,7 +9,7 @@ from gymnasium.wrappers import TransformReward
 
 tnums = [2, 3, 4, 5]
 
-with h5py.File('dental_env/demonstrations/train_dataset_log_reward.hdf5', 'w') as f:
+with h5py.File('dental_env/demonstrations/train_dataset_scaled_reward.hdf5', 'w') as f:
 
     for tnum in tnums:
 
@@ -17,7 +17,7 @@ with h5py.File('dental_env/demonstrations/train_dataset_log_reward.hdf5', 'w') a
         # env = gym.make("DentalEnv5D-v1", render_mode="human", max_episode_steps=1024, down_sample=10)
         env = gym.make("DentalEnv6D-v0", render_mode="human", max_episode_steps=1000, down_sample=10,
                        tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
-        env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
+        # env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
 
         obs, info = env.reset(seed=42)
         voxel_size = obs['voxel'].shape

@@ -19,7 +19,7 @@ import pickle
 
 # Define train configs
 config = dict(
-    total_timesteps=80_000,
+    total_timesteps=50_000,
     buffer_size=10_000,
     bc_buffer_size=1_504,
     learning_starts=500,
@@ -27,6 +27,7 @@ config = dict(
     batch_size=256,
     rl_bc_batch_ratio=0.5,
     train_freq=1,
+    tau=0.01,
     action_noise_mu=0,
     action_noise_std=0.1,
     target_policy_noise=0.1,
@@ -75,11 +76,12 @@ model = IBRL("MultiInputPolicy", env, verbose=1,
              rl_bc_batch_ratio=config["rl_bc_batch_ratio"],
              learning_starts=config["learning_starts"],
              train_freq=config["train_freq"],  # train every 100 rollout
+             tau=config["tau"],
              target_policy_noise=config["target_policy_noise"],
              target_noise_clip=config["target_policy_clip"],
              model_save_freq=config['total_timesteps']//3,  # don't save
              model_save_path=f'D:/dental_RL_data/models/ibrl_{run.id}',
-             bc_replay_buffer_path=f'dental_env/demonstrations/train_dataset_log_reward.hdf5',
+             bc_replay_buffer_path=f'dental_env/demonstrations/train_dataset_scaled_reward.hdf5',
              tensorboard_log=f"runs/ibrl_{run.id}",
              policy_kwargs=config['policy_kwargs'])
 model.learn(total_timesteps=config["total_timesteps"],

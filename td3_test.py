@@ -26,6 +26,7 @@ config = dict(
     learning_rate=1e-3,
     batch_size=256,
     train_freq=1,
+    tau=0.01,
     action_noise_mu=0,
     action_noise_std=0.1,
     target_policy_noise=0.1,
@@ -72,6 +73,7 @@ model = TD3("MultiInputPolicy", env, verbose=1,
             learning_starts=config["learning_starts"],
             batch_size=config["batch_size"],
             train_freq=config["train_freq"],  # train every 100 rollout
+            tau=config["tau"],
             target_policy_noise=config["target_policy_noise"],
             target_noise_clip=config["target_policy_clip"],
             tensorboard_log=f"runs/td3_{run.id}",
@@ -79,7 +81,7 @@ model = TD3("MultiInputPolicy", env, verbose=1,
             policy_kwargs=config['policy_kwargs'])
 
 # Prefill replay buffer with demonstration dataset
-with h5py.File(f'dental_env/demonstrations/train_dataset_log_reward.hdf5', 'r') as f:
+with h5py.File(f'dental_env/demonstrations/train_dataset_scaled_reward.hdf5', 'r') as f:
     for demo in f.keys():
         for i in range(len(f[demo]['acts'][:])):
             model.replay_buffer.add(

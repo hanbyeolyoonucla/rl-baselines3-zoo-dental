@@ -286,9 +286,14 @@ class IBRL(OffPolicyAlgorithm):
 
             # Delayed policy updates
             if self._n_updates % self.policy_delay == 0:
-                # Compute actor loss
+                # Compute actor loss using q1
                 actor_loss = -self.critic.q1_forward(replay_data.observations,
                                                      self.actor(replay_data.observations)).mean()
+                # Compute actor loss using minimum q
+                # actor_q_values = th.cat(self.critic.forward(replay_data.observations,
+                #                                             self.actor(replay_data.observations)), dim=1)
+                # rl_next_q_values, _ = th.min(actor_q_values, dim=1, keepdim=True)
+                # actor_loss = -rl_next_q_values.mean()
                 actor_losses.append(actor_loss.item())
 
                 # Optimize the actor

@@ -28,7 +28,7 @@ policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
 policy = policy.load('dental_env/demonstrations/bc_policy_ct_action_7')
 
 # Load trained IBRL
-# policy = IBRL.load(f'models/ibrl_n7i1j8w1_v1.zip')
+policy = IBRL.load(f'models/ibrl_n7i1j8w1_v1.zip')
 
 # Load trained TD3
 # policy = TD3.load(f'models/td3_j0g63jcw_v1.zip')
@@ -40,8 +40,8 @@ for itr in range(time_steps-1):
     # action = env.action_space.sample()
     # action = demons.iloc[itr+1].to_numpy() - demons.iloc[itr].to_numpy()
     # action[3:] = action[3:]//3
-    action, _ = policy.predict(state, deterministic=True)
-    # action, _ = policy.predict(state, deterministic=True, use_actor_target=False)
+    # action, _ = policy.predict(state, deterministic=True)
+    action, _ = policy.predict(state, deterministic=True, use_actor_target=False)
     state, reward, terminated, truncated, info = env.step(action)
 
     total_reward = total_reward + reward

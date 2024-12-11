@@ -60,7 +60,9 @@ class Actor(BasePolicy):
         action_dim = get_action_dim(self.action_space)
         # actor_net = create_mlp(features_dim, action_dim, net_arch, activation_fn, squash_output=True)
         if len(net_arch) > 0:
-            actor_net = [nn.Linear(features_dim, net_arch[0], bias=True), activation_fn()]
+            actor_net = [nn.Linear(features_dim, net_arch[0], bias=True),
+                         activation_fn(),
+                         nn.Dropout(p=0.5, inplace=False)]
         else:
             actor_net = []
 

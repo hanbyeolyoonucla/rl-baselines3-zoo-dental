@@ -9,6 +9,7 @@ import open3d as o3d
 import nibabel as nib
 from spatialmath import SO3, SE3, UnitQuaternion
 from scipy.ndimage import affine_transform
+from itertools import product
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -21,32 +22,34 @@ class DentalEnv6D(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, down_sample=10, angle_res=3, coffset=True, collision_check=True,
-                 tooth='tooth_4_1.0_0_0_0_0_0_0'):
+    def __init__(self, render_mode=None, angle_res=3, coffset=True, collision_check=True,
+                 tooth=None):
 
         # Define settings
-        self._ds = down_sample
         self._coffset = 0.5 if coffset else 0
         self._angle_resolution = angle_res  # burr orientation resolution 3 deg
-        self._window_size = 512
-        self._original_resolution = 0.034  # 34 micron per voxel
-        self._resolution = self._original_resolution * self._ds  # resolution of each voxel
+        self._resolution = 0.340  # resolution of each voxel: 340 micron
         self._col_check = collision_check
         self._collision = False
+        self._tooth = tooth
 
         # Initialize segmentations
-        # self._state_init = nib.load('dental_env/labels/tooth_2.nii.gz').get_fdata()  # may go reset function
-        # self._state_init = self._state_init[::self._ds, ::self._ds, ::self._ds]  # down-sampling
-        # # data specific alignment - using simple numpy rot90
-        # self._state_init = np.rot90(self._state_init, k=1, axes=(0, 2))
-        self._state_init = np.load(f'dental_env/labels_augmented/{tooth}.npy')
-        self._state_label = {
-            "empty": 0,
-            "decay": 1,
-            "enamel": 2,
-            "dentin": 3,
-            "burr": 4,
-        }
+        if self._tooth:
+            self._state_init = np.load(f'dental_env/labels_augmented/{self._tooth}.npy')
+            self._state_shape = np.array(self._state_init.shape)
+        else:
+            tnums = [2, 3, 4, 5]
+            scales = [0.9, 1.0, 1.1]
+            rotations_z = [0, 45, 90, 135, 180, 225, 270, 315]
+            rotations_y = [-10, 0, 10]
+            rotations_x = [-10, 0, 10]
+            translations_x = [-5, 0, 5]
+            translations_y = [-5, 0, 5]
+            translations_z = [-10, -5, 0]
+            self._tooth_dataset = list(product(tnums, scales, rotations_z, rotations_y, rotations_x,
+                                       translations_x, translations_y, translations_z))
+            self._state_shape = np.array([40, 60, 60])
+        self._state_label = {"empty": 0, "decay": 1, "enamel": 2, "dentin": 3, "burr": 4}
         self._channel = len(self._state_label)
 
         # Initialize burr
@@ -63,10 +66,10 @@ class DentalEnv6D(gym.Env):
         self._ee_vis_init.compute_vertex_normals()
 
         # Initialize jaw
-        # self._jaw = o3d.io.read_triangle_mesh('dental_env/cad/combined_jaw.stl')
-        self._jaw = o3d.io.read_triangle_mesh('dental_env/cad/maxilla_with_stent.stl')
+        self._jaw = o3d.io.read_triangle_mesh('dental_env/cad/jaw.stl')
+        # self._jaw = o3d.io.read_triangle_mesh('dental_env/cad/maxilla_with_stent.stl')
         self._jaw.scale(scale=1/self._resolution, center=[0, 0, 0])
-        self._jaw.translate(np.array(self._state_init.shape)//2)  # + np.array([0, 0, 1])*self._state_init.shape[2]//4
+        self._jaw.translate(self._state_shape//2 + np.array([0, 0, 1])*self._state_shape[2]//4)
         self._jaw.compute_vertex_normals()
 
         # Define collision object
@@ -85,15 +88,15 @@ class DentalEnv6D(gym.Env):
         # Define obs and action space
         self.observation_space = spaces.Dict(
             {
-                "burr_pos": spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float64),
+                "burr_pos": spaces.Box(low=-1, high=1, shape=(3,), dtype=np.float32),
                 "burr_rot": spaces.Box(low=np.array([-1, -1, -1, -1]),
-                                        high=np.array([1, 1, 1, 1]), dtype=np.float64),
-                "voxel": spaces.MultiBinary([self._channel, self._state_init.shape[0], self._state_init.shape[1],
-                                              self._state_init.shape[2]]),
+                                        high=np.array([1, 1, 1, 1]), dtype=np.float32),
+                "voxel": spaces.MultiBinary([self._channel,
+                                             self._state_shape[0], self._state_shape[1], self._state_shape[2]]),
             }
         )
 
-        self.action_space = spaces.Box(low=-1, high=1, shape=(6,), dtype=np.float64)
+        self.action_space = spaces.Box(low=-1, high=1, shape=(6,), dtype=np.float32)
         # self.action_space = spaces.Box(low=-1, high=1, shape=(6,), dtype=np.int32)
         # self.action_space = spaces.MultiDiscrete([3, 3, 3, 3, 3, 3])
 
@@ -111,10 +114,11 @@ class DentalEnv6D(gym.Env):
         curr_num_enamel = np.sum(self._states[self._state_label['enamel']])
         curr_num_dentin = np.sum(self._states[self._state_label['dentin']])
         return {
+            "tooth": self._tooth if self._tooth else self._random_tooth,
             "decay_remained": curr_num_decay,
             "decay_removal": (self._init_num_decay - curr_num_decay) / self._init_num_decay,
-            "enamel_damage": (self._init_num_enamel - curr_num_enamel) / self._init_num_enamel,
-            "dentin_damage": (self._init_num_dentin - curr_num_dentin) / self._init_num_dentin,
+            "enamel_damage": (self._init_num_enamel - curr_num_enamel),  # / self._init_num_enamel
+            "dentin_damage": (self._init_num_dentin - curr_num_dentin),  #  / self._init_num_dentin
             "is_collision": self._collision,
             "is_success": np.sum(self._states[self._state_label['decay']]) == 0
         }
@@ -124,14 +128,18 @@ class DentalEnv6D(gym.Env):
         super().reset(seed=seed)
 
         # agent initialization
+        if not self._tooth:
+            tnum, scale, rz, ry, rx, tx, ty, tz = self._tooth_dataset[self.np_random.integers(0, len(self._tooth_dataset))]
+            self._random_tooth = f'tooth_{tnum}_{scale}_{rx}_{ry}_{rz}_{tx}_{ty}_{tz}'
+            self._state_init = np.load(f'dental_env/labels_augmented/{self._random_tooth}.npy')
         self._agent_location = np.array([self._state_init.shape[0]//2,
                                          self._state_init.shape[1]//2,
-                                         self._state_init.shape[2]-1])
+                                         self._state_init.shape[2]-1], dtype=np.float32)
         # self._agent_location = self.np_random.integers(low=[0, 0, int(self._state_init.shape[2]*2/4)],
-        #                                                high=self._state_init.shape, dtype=np.int32)  # start from random
-        self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
-                                          (np.array(self._state_init.shape)//2)
-        self._agent_rotation = np.array([1, 0, 0, 0], dtype=np.float64)
+        #                        high=self._state_init.shape, dtype=np.int32)  # start from random
+        self._agent_location_normalized = ((self._agent_location - np.array(self._state_init.shape)//2) /
+                                           (np.array(self._state_init.shape)//2)).astype(np.float32)
+        self._agent_rotation = np.array([1, 0, 0, 0], dtype=np.float32)
 
         # state initialization
         self._states = np.zeros((self._channel, self._state_init.shape[0], self._state_init.shape[1],
@@ -174,15 +182,15 @@ class DentalEnv6D(gym.Env):
             self._agent_location + action[:3],
             a_min=0 + self._coffset, a_max=np.array(self._state_init.shape) - np.ones(3)*self._coffset
         )
-        self._agent_location_normalized = (self._agent_location - np.array(self._state_init.shape)//2) / \
-                                          (np.array(self._state_init.shape)//2)
+        self._agent_location_normalized = ((self._agent_location - np.array(self._state_init.shape)//2) /
+                                          (np.array(self._state_init.shape)//2)).astype(np.float32)
         agent_rotation = (UnitQuaternion(self._agent_rotation)
                           * UnitQuaternion(SO3.RPY(self._angle_resolution*action[3], self._angle_resolution*action[4],
                                                    self._angle_resolution*action[5], unit='deg')))
         if agent_rotation.angvec()[0] >= np.pi/2:
-            self._agent_rotation = UnitQuaternion.AngVec(np.pi/2, agent_rotation.angvec()[1]).A
+            self._agent_rotation = UnitQuaternion.AngVec(np.pi/2, agent_rotation.angvec()[1]).A.astype(np.float32)
         else:
-            self._agent_rotation = agent_rotation.A
+            self._agent_rotation = agent_rotation.A.astype(np.float32)
 
         # burr pose update
         self._burr = self._burr_init.copy()

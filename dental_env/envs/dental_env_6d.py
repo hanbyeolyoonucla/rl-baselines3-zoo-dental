@@ -22,20 +22,22 @@ class DentalEnv6D(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, angle_res=3, coffset=True, collision_check=True,
+    def __init__(self, render_mode=None, angle_res=1, coffset=True, collision_check=True,
                  tooth=None):
 
         # Define settings
         self._coffset = 0.5 if coffset else 0
-        self._angle_resolution = angle_res  # burr orientation resolution 3 deg
-        self._resolution = 0.340  # resolution of each voxel: 340 micron
+        self._pos_resolution = 0.0340  # action: burr position resolution 340 micron
+        self._angle_resolution = angle_res  # action: burr orientation resolution 3 deg
+        self._resolution = 0.0340  # resolution of each voxel: 340 micron
         self._col_check = collision_check
         self._collision = False
         self._tooth = tooth
 
         # Initialize segmentations
         if self._tooth:
-            self._state_init = np.load(f'dental_env/labels_augmented/{self._tooth}.npy')
+            # self._state_init = np.load(f'dental_env/labels_augmented/{self._tooth}.npy')
+            self._state_init = np.load(f'dental_env/labels_crop/{self._tooth}.npy')
             self._state_shape = np.array(self._state_init.shape)
         else:
             tnums = [2, 3, 4, 5]
@@ -56,6 +58,7 @@ class DentalEnv6D(gym.Env):
         self._burr_vis_init = o3d.io.read_triangle_mesh('dental_env/cad/burr.stl')
         self._burr_vis_init.transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))  # burr pointing -z
         self._burr_vis_init.scale(scale=1/self._resolution, center=[0, 0, 0])  # burr stl to match with voxel resolution
+        self._burr_vis_init.compute_vertex_normals()
         self._burr_init = trimesh.load('dental_env/cad/burr.stl')
         self._burr_init.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
 
@@ -113,12 +116,19 @@ class DentalEnv6D(gym.Env):
         curr_num_decay = np.sum(self._states[self._state_label['decay']])
         curr_num_enamel = np.sum(self._states[self._state_label['enamel']])
         curr_num_dentin = np.sum(self._states[self._state_label['dentin']])
+        processed_cavity = (self._init_num_decay - curr_num_decay) + (self._init_num_enamel - curr_num_enamel) +(self._init_num_dentin - curr_num_dentin)
         return {
+            "position": self._agent_location,
+            "rotation": self._agent_rotation,
             "tooth": self._tooth if self._tooth else self._random_tooth,
             "decay_remained": curr_num_decay,
             "decay_removal": (self._init_num_decay - curr_num_decay) / self._init_num_decay,
             "enamel_damage": (self._init_num_enamel - curr_num_enamel),  # / self._init_num_enamel
             "dentin_damage": (self._init_num_dentin - curr_num_dentin),  #  / self._init_num_dentin
+            "initial_caries": self._init_num_decay,
+            "processed_cavity": processed_cavity,
+            "CRE": curr_num_decay / self._init_num_decay,
+            "MIP": processed_cavity / self._init_num_decay,
             "is_collision": self._collision,
             "is_success": np.sum(self._states[self._state_label['decay']]) == 0
         }
@@ -179,7 +189,7 @@ class DentalEnv6D(gym.Env):
         # action
         # action = action - 1  # [0 1 2] to [-1 0 1]
         self._agent_location = np.clip(
-            self._agent_location + action[:3],
+            self._agent_location + self._pos_resolution * action[:3] / self._resolution,
             a_min=0 + self._coffset, a_max=np.array(self._state_init.shape) - np.ones(3)*self._coffset
         )
         self._agent_location_normalized = ((self._agent_location - np.array(self._state_init.shape)//2) /
@@ -281,7 +291,7 @@ class DentalEnv6D(gym.Env):
 
             self.window.add_geometry(self._states_voxel)
             # self.window.add_geometry(self._burr_voxel)
-            self.window.add_geometry(self._burr_vis)
+            # self.window.add_geometry(self._burr_vis)
 
             self._burr_vis.rotate(self._burr_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
                                   center=self._agent_location)
@@ -291,6 +301,8 @@ class DentalEnv6D(gym.Env):
             self.window.add_geometry(self._bounding_box())
             frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1/self._resolution)
             self.window.add_geometry(frame)
+            self._frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1/self._resolution, origin=self._agent_location)
+            self.window.add_geometry(self._frame)
 
             ctr = self.window.get_view_control()
             ctr.rotate(0, -200)
@@ -324,7 +336,12 @@ class DentalEnv6D(gym.Env):
 
             self.window.update_geometry(self._states_voxel)
             # self.window.update_geometry(self._burr_voxel)
-            self.window.update_geometry(self._burr_vis)
+            # self.window.update_geometry(self._burr_vis)
+
+            self._frame.translate(self._agent_location, relative=False)
+            self._frame.rotate(self._frame.get_rotation_matrix_from_quaternion(self._agent_rotation),
+                               center=self._agent_location)
+            self.window.update_geometry(self._frame)
 
             self.window.poll_events()
             self.window.update_renderer()
@@ -346,6 +363,8 @@ class DentalEnv6D(gym.Env):
                                   center=self._agent_location)
             self._ee_vis.rotate(self._ee_vis.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
                                 center=self._agent_location)
+            self._frame.rotate(self._frame.get_rotation_matrix_from_quaternion(self._agent_rotation).transpose(),
+                               center=self._agent_location)
 
     @staticmethod
     def crop_center(voxel, cropx, cropy, cropz):

@@ -47,3 +47,9 @@ register(
      entry_point="dental_env.envs:DentalEnv6D",
      max_episode_steps=512,
 )
+
+register(
+     id="DentalEnvPCD-v0",
+     entry_point="dental_env.envs:DentalEnvPCD",
+     max_episode_steps=512,
+)

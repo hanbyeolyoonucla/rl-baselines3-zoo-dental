@@ -33,12 +33,16 @@ class CustomCNN3D(BaseFeaturesExtractor):
         # Re-ordering will be done by pre-preprocessing or wrapper
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv3d(n_input_channels, 32, kernel_size=8, stride=4),
+            nn.Conv3d(n_input_channels, 8, kernel_size=3, stride=1),
             nn.ReLU(),
-            nn.Conv3d(32, 64, kernel_size=5, stride=2),
+            nn.Conv3d(8, 8, kernel_size=3, stride=1),
             nn.ReLU(),
-            nn.Conv3d(64, 64, kernel_size=3, stride=2),
+            nn.MaxPool3d(kernel_size=2),
+            nn.Conv3d(8, 16, kernel_size=3, stride=1),
             nn.ReLU(),
+            nn.Conv3d(16, 16, kernel_size=3, stride=1),
+            nn.ReLU(),
+            nn.MaxPool3d(kernel_size=2),
             # original structure
             # nn.Conv3d(4, 32, kernel_size=8, stride=4, padding=0),
             # nn.ReLU(),

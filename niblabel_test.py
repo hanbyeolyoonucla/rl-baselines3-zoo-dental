@@ -89,9 +89,9 @@ def downsample_state(state, ds=10):
         for j in range(dh):
             for k in range(dd):
                 # Define the boundaries of the 10x10x10 block
-                x_start, x_end = i * 10, (i + 1) * 10
-                y_start, y_end = j * 10, (j + 1) * 10
-                z_start, z_end = k * 10, (k + 1) * 10
+                x_start, x_end = i * ds, (i + 1) * ds
+                y_start, y_end = j * ds, (j + 1) * ds
+                z_start, z_end = k * ds, (k + 1) * ds
 
                 # Extract the sub-block
                 sub_block = state[x_start:x_end, y_start:y_end, z_start:z_end]

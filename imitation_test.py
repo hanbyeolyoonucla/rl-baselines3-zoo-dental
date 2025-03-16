@@ -15,9 +15,11 @@ from stable_baselines3.common.utils import get_schedule_fn
 import h5py
 from imitation.data.types import TrajectoryWithRew, DictObs
 
-with h5py.File('dental_env/demonstrations/train_dataset.hdf5', 'r') as f:
+with h5py.File('dental_env/demos_augmented/traction_hdf5/tooth_2_top.hdf5', 'r') as f:
     trajectories = []
     for demo in f.keys():
+        if not ('1.0_None_top_1' in demo):
+            continue
         dictobs = dict(voxel=f[demo]['obs']['voxel'][:],
                        burr_pos=f[demo]['obs']['burr_pos'][:],
                        burr_rot=f[demo]['obs']['burr_rot'][:])
@@ -28,12 +30,20 @@ with h5py.File('dental_env/demonstrations/train_dataset.hdf5', 'r') as f:
                                        terminal=True)
         trajectories.append(trajectory)
 
+num_trajectories = len(trajectories)
+train_ratio, val_ratio = 0.8, 0.9
+train_idx = int(num_trajectories*train_ratio)
+val_idx = int(num_trajectories*val_ratio)
+indices = np.arange(num_trajectories)
+np.random.shuffle(indices)
+train_indices, val_indices, test_indices = indices[:train_idx], indices[train_idx:val_idx], indices[val_idx:]
 
-transitions = rollout.flatten_trajectories(trajectories)
+train_transitions = rollout.flatten_trajectories([trajectories[idx] for idx in train_indices])
+val_transitions = rollout.flatten_trajectories([trajectories[idx] for idx in val_indices])
+test_transitions = rollout.flatten_trajectories([trajectories[idx] for idx in test_indices])
 
-tnum = 2
-env = gym.make("DentalEnv6D-v0", max_episode_steps=800,
-               render_mode="rgb_array", down_sample=10, tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
+tooth = 'tooth_2_1.0_None_top_1_119_303_464'
+env = gym.make("DentalEnvPCD-v0", max_episode_steps=200, tooth=tooth)
 policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
                                      action_space=env.action_space,
                                      lr_schedule=get_schedule_fn(0.005),
@@ -43,13 +53,13 @@ bc_trainer = bc.BC(
     observation_space=env.observation_space,
     action_space=env.action_space,
     batch_size=512,
-    demonstrations=transitions,
-    policy=policy.load('dental_env/demonstrations/bc_policy_ct_action_6'),  #
+    demonstrations=train_transitions,
+    policy=policy,  # .load('dental_env/demonstrations/bc_policy_ct_action_6')
     rng=rng,
 )
 
-bc_trainer.train(n_epochs=1000, log_interval=10)
+bc_trainer.train(n_epochs=10, log_interval=1)
 # reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 1)
 # print(f"Reward after training: {reward_after_training}")
 
-bc_trainer.policy.save('dental_env/demonstrations/bc_policy_ct_action_7')
+# bc_trainer.policy.save('dental_env/demos_augmented/bc_traction_policy')

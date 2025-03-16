@@ -86,6 +86,8 @@ with h5py.File(f'dental_env/demos_augmented/{model}_hdf5/{data}.hdf5', 'w') as f
                 "processed_cavity": int(info['processed_cavity']),
                 'CRE': float(info['CRE']),
                 'MIP': float(info['MIP']),
+                'traverse_length': float(info['traverse_length']),
+                'traverse_angle': float(info['traverse_angle']),
                 'total_collisions': int(total_collisions),
             }
             env.close()

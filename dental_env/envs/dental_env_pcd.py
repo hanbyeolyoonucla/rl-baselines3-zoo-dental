@@ -26,7 +26,7 @@ class DentalEnvPCD(gym.Env):
     def __init__(self, render_mode=None, collision_check=True, tooth=None):
 
         # Define settings
-        self._jaw_offset = np.array([3, 3, 4.5])
+        self._jaw_offset = np.array([1.5, 1.5, 0])
         self._pos_resolution = 1  # action: burr position resolution 1000 micron
         self._angle_resolution = 1  # action: burr orientation resolution 1 deg
         self._resolution = 0.102  # resolution of each voxel: 102 micron
@@ -85,7 +85,7 @@ class DentalEnvPCD(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-        self.window = None
+        self.window1, self.window1z, self.window2, self.window2z = None, None, None, None
         self.window_col = None
         self.clock = None
 
@@ -109,6 +109,8 @@ class DentalEnvPCD(gym.Env):
             "processed_cavity": processed_cavity,
             "CRE": curr_num_decay / self._init_num_decay,
             "MIP": processed_cavity / self._init_num_decay,
+            "traverse_length": self._traverse_length,
+            "traverse_angle": self._traverse_angle,
             "is_collision": self._collision,
             "is_success": curr_num_decay == 0
         }
@@ -140,6 +142,7 @@ class DentalEnvPCD(gym.Env):
                                              self._state_init.shape[2]/2 * self._resolution], dtype=np.float32)
             self._agent_rotation = UnitQuaternion(SO3.RPY(90, 0, 0, unit='deg')).A.astype(np.float32)
 
+        self._init_rotation = self._agent_rotation
         # normalize location
         self._agent_location_normalized = ((self._agent_location - np.array(self._state_init.shape)/2 * self._resolution) /
                                            (np.array(self._state_init.shape)/2 * self._resolution)).astype(np.float32)
@@ -179,6 +182,10 @@ class DentalEnvPCD(gym.Env):
         self._init_num_enamel = len(self._enamel_points)
         self._init_num_dentin = len(self._dentin_points)
 
+        # traverse info
+        self._traverse_length = 0
+        self._traverse_angle = 0
+
         observation = self._get_obs()
         info = self._get_info()
 
@@ -189,21 +196,25 @@ class DentalEnvPCD(gym.Env):
 
     def step(self, action):
 
-        # update agent position and orientation
-        self._agent_location = np.clip(
-            self._agent_location + self._pos_resolution * action[:3],
-            a_min=0, a_max=np.array(self._state_init.shape) * self._resolution
-        )
+        # update agent position
+        action_position = self._pos_resolution * action[:3]
+        self._agent_location = np.clip(self._agent_location + action_position,
+                                       a_min=0, a_max=np.array(self._state_init.shape)*self._resolution)
         self._agent_location_normalized = ((self._agent_location - np.array(self._state_init.shape)/2 * self._resolution) /
                                            (np.array(self._state_init.shape)/2 * self._resolution)).astype(np.float32)
-        # agent_rotation = UnitQuaternion(self._agent_rotation) * UnitQuaternion(action[3:])
-        agent_rotation = (UnitQuaternion(self._agent_rotation)
-                          * UnitQuaternion(SO3.RPY(self._angle_resolution*action[3], self._angle_resolution*action[4],
-                                                   self._angle_resolution*action[5], unit='deg')))
-        if agent_rotation.angvec()[0] >= np.pi/2:
-            self._agent_rotation = UnitQuaternion.AngVec(np.pi/2, agent_rotation.angvec()[1]).A.astype(np.float32)
+        self._traverse_length += np.linalg.norm(action_position)
+
+        # update agent rotation
+        action_rotation = UnitQuaternion(SO3.RPY(self._angle_resolution*action[3], self._angle_resolution*action[4],
+                                                 self._angle_resolution*action[5], unit='deg'))
+        agent_rotation = UnitQuaternion(self._agent_rotation) * action_rotation
+        change_rotation = UnitQuaternion(self._init_rotation).inv() * agent_rotation
+        if change_rotation.angvec()[0] > np.pi/2:
+            self._agent_rotation = (UnitQuaternion(self._init_rotation) *
+                                    UnitQuaternion.AngVec(np.pi/2, change_rotation.angvec()[1])).A.astype(np.float32)
         else:
             self._agent_rotation = agent_rotation.A.astype(np.float32)
+        self._traverse_angle += action_rotation.angvec(unit='deg')[0]
 
         # burr pose update
         self._burr = copy.deepcopy(self._burr_init)
@@ -277,11 +288,20 @@ class DentalEnvPCD(gym.Env):
 
     def _render_frame(self):
 
-        if self.window is None and self.render_mode == "human":
+        if self.window1 is None and self.render_mode == "human":
 
-            self.window = o3d.visualization.Visualizer()
-            self.window.create_window(window_name='Cut Path Episode', width=1080, height=1080,
-                                      left=50, top=50, visible=True)
+            self.window1 = o3d.visualization.Visualizer()
+            self.window1.create_window(window_name='Cut Path Episode', width=1080, height=1080,
+                                       left=50+1080, top=50, visible=True)
+            self.window1z = o3d.visualization.Visualizer()
+            self.window1z.create_window(window_name='Cut Path Episode', width=1080, height=1080,
+                                        left=50, top=50, visible=True)
+            self.window2 = o3d.visualization.Visualizer()
+            self.window2.create_window(window_name='Cut Path Episode', width=1080, height=1080,
+                                       left=50+1080, top=50+1080, visible=True)
+            self.window2z = o3d.visualization.Visualizer()
+            self.window2z.create_window(window_name='Cut Path Episode', width=1080, height=1080,
+                                        left=50, top=50+1080, visible=True)
 
             self._ee_vis = copy.deepcopy(self._ee_vis_init)
             self._burr_vis = copy.deepcopy(self._burr_init)
@@ -295,38 +315,91 @@ class DentalEnvPCD(gym.Env):
             self._ee_vis.rotate(UnitQuaternion(self._agent_rotation).SO3().A,
                                 center=self._agent_location)
 
-            self.window.add_geometry(self._burr_vis)
-            self.window.add_geometry(self._decay_pcd)
-            self.window.add_geometry(self._enamel_pcd)
-            self.window.add_geometry(self._dentin_pcd)
+            # window 1
+            self.window1.add_geometry(self._burr_vis)
+            self.window1.add_geometry(self._decay_pcd)
+            self.window1.add_geometry(self._enamel_pcd)
+            self.window1.add_geometry(self._dentin_pcd)
+            self.window1.add_geometry(self._bounding_box(res=self._resolution))
+            frame = o3d.geometry.TriangleMesh.create_coordinate_frame()
+            self.window1.add_geometry(frame)
+            self._frame = o3d.geometry.TriangleMesh.create_coordinate_frame(origin=self._agent_location)
+            self.window1.add_geometry(self._frame)
+            self.ctr1 = self.window1.get_view_control()
+            self.ctr1.set_up([0, 0, 1])
+            self.ctr1.set_front([0, -1, 1])
+            # self.ctr1.set_lookat(self._agent_location)
+
+            # window 1z
+            self.window1z.add_geometry(self._burr_vis)
+            self.window1z.add_geometry(self._decay_pcd)
+            self.window1z.add_geometry(self._enamel_pcd)
+            self.window1z.add_geometry(self._dentin_pcd)
+            self.window1z.add_geometry(self._bounding_box(res=self._resolution))
+            self.window1z.add_geometry(frame)
+            self.window1z.add_geometry(self._frame)
+            self.ctr1z = self.window1z.get_view_control()
+            self.ctr1z.set_up([0, 0, 1])
+            self.ctr1z.set_front([0, -1, 1])
+            self.ctr1z.set_lookat(self._agent_location)
+            self.ctr1z.set_zoom(0.3)
+
+            # window 2
+            self.window2.add_geometry(self._burr_vis)
+            self.window2.add_geometry(self._decay_pcd)
+            self.window2.add_geometry(self._enamel_pcd)
+            self.window2.add_geometry(self._dentin_pcd)
+            self.window2.add_geometry(self._bounding_box(res=self._resolution))
+            self.window2.add_geometry(frame)
+            self.window2.add_geometry(self._frame)
+            self.ctr2 = self.window2.get_view_control()
+            self.ctr2.set_up([0, 0, 1])
+            self.ctr2.set_front([1, 0, 1])
+            # self.ctr2.set_lookat(self._agent_location)
+
+            # window 2z
+            self.window2z.add_geometry(self._burr_vis)
+            self.window2z.add_geometry(self._decay_pcd)
+            self.window2z.add_geometry(self._enamel_pcd)
+            self.window2z.add_geometry(self._dentin_pcd)
+            self.window2z.add_geometry(self._bounding_box(res=self._resolution))
+            self.window2z.add_geometry(frame)
+            self.window2z.add_geometry(self._frame)
+            self.ctr2z = self.window2z.get_view_control()
+            self.ctr2z.set_up([0, 0, 1])
+            self.ctr2z.set_front([1, 0, 1])
+            self.ctr2z.set_lookat(self._agent_location)
+            self.ctr2z.set_zoom(0.3)
 
             self._burr_vis.rotate(UnitQuaternion(self._agent_rotation).SO3().A.transpose(),
                                   center=self._agent_location)
             self._ee_vis.rotate(UnitQuaternion(self._agent_rotation).SO3().A.transpose(),
                                 center=self._agent_location)
 
-            self.window.add_geometry(self._bounding_box(res=self._resolution))
-            frame = o3d.geometry.TriangleMesh.create_coordinate_frame()
-            self.window.add_geometry(frame)
-            self._frame = o3d.geometry.TriangleMesh.create_coordinate_frame(origin=self._agent_location)
-            self.window.add_geometry(self._frame)
-
-            ctr = self.window.get_view_control()
-            ctr.rotate(0, -200)
-
             if self._col_check and self.window_col is None:
                 self.window_col = o3d.visualization.Visualizer()
                 self.window_col.create_window(window_name='Cut Path Episode - Collision Status',
-                                              width=1080, height=1080, left=1130, top=50, visible=True)
-
+                                              width=1080, height=1080, left=50+2*1080, top=50, visible=True)
                 self.window_col.add_geometry(self._burr_vis)
                 self.window_col.add_geometry(self._ee_vis)
                 self.window_col.add_geometry(self._jaw)
                 self.window_col.add_geometry(self._bounding_box(res=self._resolution))
                 self.window_col.add_geometry(frame)
-
                 ctr_col = self.window_col.get_view_control()
-                ctr_col.rotate(0, -300)
+                ctr_col.set_up([0, 0, 1])
+                ctr_col.set_front([0, -1, 1])
+
+                self.window_col2 = o3d.visualization.Visualizer()
+                self.window_col2.create_window(window_name='Cut Path Episode - Collision Status',
+                                               width=1080, height=1080, left=50+2*1080, top=50+1080, visible=True)
+                self.window_col2.add_geometry(self._burr_vis)
+                self.window_col2.add_geometry(self._ee_vis)
+                self.window_col2.add_geometry(self._jaw)
+                self.window_col2.add_geometry(self._bounding_box(res=self._resolution))
+                self.window_col2.add_geometry(frame)
+                ctr_col2 = self.window_col2.get_view_control()
+                ctr_col2.set_up([0, 0, 1])
+                ctr_col2.set_front([1, 0, 1])
 
         if self.render_mode == "human":
 
@@ -336,19 +409,42 @@ class DentalEnvPCD(gym.Env):
             self._ee_vis.translate(self._ee_center+self._agent_location, relative=False)
             self._ee_vis.rotate(UnitQuaternion(self._agent_rotation).SO3().A,
                                 center=self._agent_location)
-
-            self.window.update_geometry(self._burr_vis)
-            self.window.update_geometry(self._decay_pcd)
-            self.window.update_geometry(self._enamel_pcd)
-            self.window.update_geometry(self._dentin_pcd)
-
             self._frame.translate(self._agent_location, relative=False)
             self._frame.rotate(UnitQuaternion(self._agent_rotation).SO3().A,
                                center=self._agent_location)
-            self.window.update_geometry(self._frame)
 
-            self.window.poll_events()
-            self.window.update_renderer()
+            self.window1.update_geometry(self._burr_vis)
+            self.window1.update_geometry(self._decay_pcd)
+            self.window1.update_geometry(self._enamel_pcd)
+            self.window1.update_geometry(self._dentin_pcd)
+            self.window1.update_geometry(self._frame)
+            # self.ctr1.set_lookat(self._agent_location)
+            self.window1.poll_events()
+            self.window1.update_renderer()
+            self.window1z.update_geometry(self._burr_vis)
+            self.window1z.update_geometry(self._decay_pcd)
+            self.window1z.update_geometry(self._enamel_pcd)
+            self.window1z.update_geometry(self._dentin_pcd)
+            self.window1z.update_geometry(self._frame)
+            self.ctr1z.set_lookat(self._agent_location)
+            self.window1z.poll_events()
+            self.window1z.update_renderer()
+            self.window2.update_geometry(self._burr_vis)
+            self.window2.update_geometry(self._decay_pcd)
+            self.window2.update_geometry(self._enamel_pcd)
+            self.window2.update_geometry(self._dentin_pcd)
+            self.window2.update_geometry(self._frame)
+            # self.ctr2.set_lookat(self._agent_location)
+            self.window2.poll_events()
+            self.window2.update_renderer()
+            self.window2z.update_geometry(self._burr_vis)
+            self.window2z.update_geometry(self._decay_pcd)
+            self.window2z.update_geometry(self._enamel_pcd)
+            self.window2z.update_geometry(self._dentin_pcd)
+            self.window2z.update_geometry(self._frame)
+            self.ctr2z.set_lookat(self._agent_location)
+            self.window2z.poll_events()
+            self.window2z.update_renderer()
 
             if self._col_check:
 
@@ -359,9 +455,12 @@ class DentalEnvPCD(gym.Env):
 
                 self.window_col.update_geometry(self._burr_vis)
                 self.window_col.update_geometry(self._ee_vis)
-
                 self.window_col.poll_events()
                 self.window_col.update_renderer()
+                self.window_col2.update_geometry(self._burr_vis)
+                self.window_col2.update_geometry(self._ee_vis)
+                self.window_col2.poll_events()
+                self.window_col2.update_renderer()
 
             self._burr_vis.rotate(UnitQuaternion(self._agent_rotation).SO3().A.transpose(),
                                   center=self._agent_location)
@@ -418,10 +517,18 @@ class DentalEnvPCD(gym.Env):
 
 
     def close(self):
-        if self.window is not None and self.render_mode == "human":
-            self.window.close()
-            self.window = None
+        if self.window1 is not None and self.render_mode == "human":
+            self.window1.close()
+            self.window1z.close()
+            self.window2.close()
+            self.window2z.close()
+            self.window1 = None
+            self.window1z = None
+            self.window2 = None
+            self.window2z = None
 
         if self.window_col is not None and self.render_mode == "human":
             self.window_col.close()
+            self.window_col2.close()
             self.window_col = None
+            self.window_col2 = None

@@ -23,7 +23,7 @@ class DentalEnvPCD(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, collision_check=True, tooth=None):
+    def __init__(self, render_mode=None, collision_check=True, tooth=None, window_size=1080):
 
         # Define settings
         self._jaw_offset = np.array([1.5, 1.5, 0])
@@ -33,6 +33,7 @@ class DentalEnvPCD(gym.Env):
         self._col_check = collision_check
         self._collision = False
         self._tooth = tooth
+        self._window_size = window_size
 
         # Initialize segmentations
         if self._tooth:
@@ -164,8 +165,8 @@ class DentalEnvPCD(gym.Env):
         self._enamel_pcd.points = o3d.utility.Vector3dVector(self._enamel_points)
         self._dentin_pcd.points = o3d.utility.Vector3dVector(self._dentin_points)
         self._decay_pcd.paint_uniform_color([0.3, 0.3, 0.3])
-        self._enamel_pcd.paint_uniform_color([0.95, 0.95, 0.99])
-        self._dentin_pcd.paint_uniform_color([0.95, 0.95, 0.95])
+        self._enamel_pcd.paint_uniform_color([0.95, 0.95, 0.95])
+        self._dentin_pcd.paint_uniform_color([0.95, 0.95, 0.99])
 
         # state initialization
         decay_idx = (self._decay_points / self._resolution - 1/2).astype(int)
@@ -236,8 +237,8 @@ class DentalEnvPCD(gym.Env):
         self._enamel_pcd.points = o3d.utility.Vector3dVector(self._enamel_points)
         self._dentin_pcd.points = o3d.utility.Vector3dVector(self._dentin_points)
         self._decay_pcd.paint_uniform_color([0.3, 0.3, 0.3])
-        self._enamel_pcd.paint_uniform_color([0.95, 0.95, 0.99])
-        self._dentin_pcd.paint_uniform_color([0.95, 0.95, 0.95])
+        self._enamel_pcd.paint_uniform_color([0.95, 0.95, 0.95])
+        self._dentin_pcd.paint_uniform_color([0.95, 0.95, 0.99])
 
         # collision check
         self._collision = False
@@ -291,17 +292,17 @@ class DentalEnvPCD(gym.Env):
         if self.window1 is None and self.render_mode == "human":
 
             self.window1 = o3d.visualization.Visualizer()
-            self.window1.create_window(window_name='Cut Path Episode', width=1080, height=1080,
-                                       left=50+1080, top=50, visible=True)
+            self.window1.create_window(window_name='Cut Path Episode', width=self._window_size, height=self._window_size,
+                                       left=50+self._window_size, top=50, visible=True)
             self.window1z = o3d.visualization.Visualizer()
-            self.window1z.create_window(window_name='Cut Path Episode', width=1080, height=1080,
+            self.window1z.create_window(window_name='Cut Path Episode', width=self._window_size, height=self._window_size,
                                         left=50, top=50, visible=True)
             self.window2 = o3d.visualization.Visualizer()
-            self.window2.create_window(window_name='Cut Path Episode', width=1080, height=1080,
-                                       left=50+1080, top=50+1080, visible=True)
+            self.window2.create_window(window_name='Cut Path Episode', width=self._window_size, height=self._window_size,
+                                       left=50+self._window_size, top=50+self._window_size, visible=True)
             self.window2z = o3d.visualization.Visualizer()
-            self.window2z.create_window(window_name='Cut Path Episode', width=1080, height=1080,
-                                        left=50, top=50+1080, visible=True)
+            self.window2z.create_window(window_name='Cut Path Episode', width=self._window_size, height=self._window_size,
+                                        left=50, top=50+self._window_size, visible=True)
 
             self._ee_vis = copy.deepcopy(self._ee_vis_init)
             self._burr_vis = copy.deepcopy(self._burr_init)
@@ -333,16 +334,16 @@ class DentalEnvPCD(gym.Env):
             # window 1z
             self.window1z.add_geometry(self._burr_vis)
             self.window1z.add_geometry(self._decay_pcd)
-            self.window1z.add_geometry(self._enamel_pcd)
-            self.window1z.add_geometry(self._dentin_pcd)
+            # self.window1z.add_geometry(self._enamel_pcd)
+            # self.window1z.add_geometry(self._dentin_pcd)
             self.window1z.add_geometry(self._bounding_box(res=self._resolution))
             self.window1z.add_geometry(frame)
             self.window1z.add_geometry(self._frame)
             self.ctr1z = self.window1z.get_view_control()
             self.ctr1z.set_up([0, 0, 1])
-            self.ctr1z.set_front([0, -1, 1])
+            self.ctr1z.set_front([0, -1, 0])
             self.ctr1z.set_lookat(self._agent_location)
-            self.ctr1z.set_zoom(0.3)
+            self.ctr1z.set_zoom(0.2)
 
             # window 2
             self.window2.add_geometry(self._burr_vis)
@@ -360,16 +361,16 @@ class DentalEnvPCD(gym.Env):
             # window 2z
             self.window2z.add_geometry(self._burr_vis)
             self.window2z.add_geometry(self._decay_pcd)
-            self.window2z.add_geometry(self._enamel_pcd)
-            self.window2z.add_geometry(self._dentin_pcd)
+            # self.window2z.add_geometry(self._enamel_pcd)
+            # self.window2z.add_geometry(self._dentin_pcd)
             self.window2z.add_geometry(self._bounding_box(res=self._resolution))
             self.window2z.add_geometry(frame)
             self.window2z.add_geometry(self._frame)
             self.ctr2z = self.window2z.get_view_control()
             self.ctr2z.set_up([0, 0, 1])
-            self.ctr2z.set_front([1, 0, 1])
+            self.ctr2z.set_front([1, 0, 0])
             self.ctr2z.set_lookat(self._agent_location)
-            self.ctr2z.set_zoom(0.3)
+            self.ctr2z.set_zoom(0.2)
 
             self._burr_vis.rotate(UnitQuaternion(self._agent_rotation).SO3().A.transpose(),
                                   center=self._agent_location)
@@ -379,7 +380,7 @@ class DentalEnvPCD(gym.Env):
             if self._col_check and self.window_col is None:
                 self.window_col = o3d.visualization.Visualizer()
                 self.window_col.create_window(window_name='Cut Path Episode - Collision Status',
-                                              width=1080, height=1080, left=50+2*1080, top=50, visible=True)
+                                              width=self._window_size, height=self._window_size, left=50+2*self._window_size, top=50, visible=True)
                 self.window_col.add_geometry(self._burr_vis)
                 self.window_col.add_geometry(self._ee_vis)
                 self.window_col.add_geometry(self._jaw)
@@ -391,7 +392,7 @@ class DentalEnvPCD(gym.Env):
 
                 self.window_col2 = o3d.visualization.Visualizer()
                 self.window_col2.create_window(window_name='Cut Path Episode - Collision Status',
-                                               width=1080, height=1080, left=50+2*1080, top=50+1080, visible=True)
+                                               width=self._window_size, height=self._window_size, left=50+2*self._window_size, top=50+self._window_size, visible=True)
                 self.window_col2.add_geometry(self._burr_vis)
                 self.window_col2.add_geometry(self._ee_vis)
                 self.window_col2.add_geometry(self._jaw)
@@ -423,8 +424,8 @@ class DentalEnvPCD(gym.Env):
             self.window1.update_renderer()
             self.window1z.update_geometry(self._burr_vis)
             self.window1z.update_geometry(self._decay_pcd)
-            self.window1z.update_geometry(self._enamel_pcd)
-            self.window1z.update_geometry(self._dentin_pcd)
+            # self.window1z.update_geometry(self._enamel_pcd)
+            # self.window1z.update_geometry(self._dentin_pcd)
             self.window1z.update_geometry(self._frame)
             self.ctr1z.set_lookat(self._agent_location)
             self.window1z.poll_events()
@@ -439,8 +440,8 @@ class DentalEnvPCD(gym.Env):
             self.window2.update_renderer()
             self.window2z.update_geometry(self._burr_vis)
             self.window2z.update_geometry(self._decay_pcd)
-            self.window2z.update_geometry(self._enamel_pcd)
-            self.window2z.update_geometry(self._dentin_pcd)
+            # self.window2z.update_geometry(self._enamel_pcd)
+            # self.window2z.update_geometry(self._dentin_pcd)
             self.window2z.update_geometry(self._frame)
             self.ctr2z.set_lookat(self._agent_location)
             self.window2z.poll_events()

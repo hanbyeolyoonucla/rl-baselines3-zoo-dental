@@ -6,13 +6,15 @@ from spatialmath import UnitQuaternion
 
 
 def keyboard_to_action(key):
-    act = np.array([0, 0, 0, 0, 0, 0])
-    keymap = {'4': np.array([-1, 0, 0, 0, 0, 0]), '6': np.array([1, 0, 0, 0, 0, 0]),
-              '1': np.array([0, -1, 0, 0, 0, 0]), '9': np.array([0, 1, 0, 0, 0, 0]),
-              '2': np.array([0, 0, -1, 0, 0, 0]), '8': np.array([0, 0, 1, 0, 0, 0]),
-              'a': np.array([0, 0, 0, -1, 0, 0]), 'd': np.array([0, 0, 0, 1, 0, 0]),
-              'z': np.array([0, 0, 0, 0, -1, 0]), 'e': np.array([0, 0, 0, 0, 1, 0]),
-              'x': np.array([0, 0, 0, 0, 0, -1]), 'w': np.array([0, 0, 0, 0, 0, 1]),
+    act = np.array([0, 0, 0, 0, 0, 0], dtype=np.float64)
+    pos_res = 0.1
+    ang_res = 1
+    keymap = {'4': np.array([-pos_res, 0, 0, 0, 0, 0]), '6': np.array([pos_res, 0, 0, 0, 0, 0]),
+              '1': np.array([0, -pos_res, 0, 0, 0, 0]), '9': np.array([0, pos_res, 0, 0, 0, 0]),
+              '2': np.array([0, 0, -pos_res, 0, 0, 0]), '8': np.array([0, 0, pos_res, 0, 0, 0]),
+              'a': np.array([0, 0, 0, -ang_res, 0, 0]), 'd': np.array([0, 0, 0, ang_res, 0, 0]),
+              'z': np.array([0, 0, 0, 0, -ang_res, 0]), 'e': np.array([0, 0, 0, 0, ang_res, 0]),
+              'x': np.array([0, 0, 0, 0, 0, -ang_res]), 'w': np.array([0, 0, 0, 0, 0, ang_res]),
               }
     for c in key:
         act += keymap.get(c, np.array([0, 0, 0, 0, 0, 0]))
@@ -47,7 +49,7 @@ if __name__ == "__main__":
     # tooth = 'tooth_5_1.0_None_top_2_159_241_487'
 
     # Initialize gym environment
-    env = gym.make("DentalEnvPCD-v0", render_mode="human", max_episode_steps=1000, tooth=tooth)
+    env = gym.make("DentalEnvPCD-v0", render_mode="human", max_episode_steps=1000, tooth=tooth, window_size=512)
     state, info = env.reset(seed=42)
 
     total_reward = 0

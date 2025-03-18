@@ -21,7 +21,7 @@ for tnum in tnums:
         for model in models:
             data = f'tooth_{tnum}_{cut_type}'
             tooth_dir = f'dental_env/demos_augmented/{model}'
-            print(data)
+            print(f'{model}: {data}')
 
             with h5py.File(f'dental_env/demos_augmented/{model}_hdf5/{data}.hdf5', 'w') as f:
                 with open(f'dental_env/demos_augmented/{model}_hdf5/{data}.yml', 'w') as s:
@@ -45,6 +45,8 @@ for tnum in tnums:
                         # test demonstration
                         demos = np.loadtxt(f'dental_env/demos_augmented/{model}/{tooth}.csv', delimiter=' ')
                         time_steps = len(demos)
+                        if time_steps > 500:
+                            continue
 
                         # create h5py dataset
                         obs_voxel = f.create_dataset(f'{tooth}/obs/voxel',

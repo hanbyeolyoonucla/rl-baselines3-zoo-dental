@@ -27,6 +27,10 @@ if __name__ == "__main__":
     # tooth = 'tooth_2_1.1_None_top_1_131_333_539'
     # tooth = 'tooth_2_1.1_None_top_1_158_346_562'
     # tooth = 'tooth_4_1.0_None_right_0_223_135_415'
+    # tooth = 'tooth_2_0.9_0_left_2_266_295_346'
+    # tooth = 'tooth_2_0.9_1_left_2_241_309_379'
+    tooth = 'tooth_2_0.9_0_right_0_109_229_379'
+    # tooth = 'tooth_2_1.0_0_right_0_131_250_416'
     # tooth = 'tooth_2_1.0_0_top_1_251_287_464'
     # tooth = 'tooth_2_1.0_1_top_1_91_279_464'
     # tooth = 'tooth_2_1.0_None_top_1_91_287_464'
@@ -35,7 +39,7 @@ if __name__ == "__main__":
     # tooth = 'tooth_2_0.9_None_top_1_77_254_412'
 
     # Initialize gym environment
-    policy_type = ['demo', 'random'][1]
+    policy_type = ['demo', 'random'][0]
     env = gym.make("DentalEnvPCD-v0", render_mode="human", max_episode_steps=1000, tooth=tooth)
     state, info = env.reset(seed=42)
 

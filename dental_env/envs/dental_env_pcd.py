@@ -26,7 +26,7 @@ class DentalEnvPCD(gym.Env):
     def __init__(self, render_mode=None, collision_check=True, tooth=None, window_size=1080):
 
         # Define settings
-        self._jaw_offset = np.array([1.5, 1.5, 0])
+        self._jaw_offset = np.array([3.5, 3.5, -1])
         self._pos_resolution = 1  # action: burr position resolution 1000 micron
         self._angle_resolution = 1  # action: burr orientation resolution 1 deg
         self._resolution = 0.102  # resolution of each voxel: 102 micron
@@ -136,12 +136,12 @@ class DentalEnvPCD(gym.Env):
             self._agent_location = np.array([self._state_init.shape[0]/2 * self._resolution,
                                              self._state_init.shape[1] * self._resolution,
                                              self._state_init.shape[2]/2 * self._resolution], dtype=np.float32)
-            self._agent_rotation = UnitQuaternion(SO3.RPY(-90, 0, 0, unit='deg')).A.astype(np.float32)
+            self._agent_rotation = UnitQuaternion(SO3.RPY(-30, 0, -90, unit='deg', order='xyz')).A.astype(np.float32)
         else:
             self._agent_location = np.array([self._state_init.shape[0]/2 * self._resolution,
                                              0 * self._resolution,
                                              self._state_init.shape[2]/2 * self._resolution], dtype=np.float32)
-            self._agent_rotation = UnitQuaternion(SO3.RPY(90, 0, 0, unit='deg')).A.astype(np.float32)
+            self._agent_rotation = UnitQuaternion(SO3.RPY(30, 0, 90, unit='deg', order='xyz')).A.astype(np.float32)
 
         self._init_rotation = self._agent_rotation
         # normalize location
@@ -400,7 +400,7 @@ class DentalEnvPCD(gym.Env):
                 self.window_col2.add_geometry(frame)
                 ctr_col2 = self.window_col2.get_view_control()
                 ctr_col2.set_up([0, 0, 1])
-                ctr_col2.set_front([1, 0, 1])
+                ctr_col2.set_front([1, 2, 1])
 
         if self.render_mode == "human":
 

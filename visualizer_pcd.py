@@ -17,7 +17,9 @@ from spatialmath import UnitQuaternion
 if __name__ == "__main__":
 
     # tooth
-    tooth_dir = f'dental_env/demos_augmented/coverage'
+    policy_type = ['demo', 'random'][0]
+    model = ['coverage', 'traction', 'human'][0]
+    tooth_dir = f'dental_env/demos_augmented/{model}'
     dirlist = os.listdir(tooth_dir)
     fname = dirlist[np.random.randint(1, len(dirlist))]
     tooth = fname[:-4]
@@ -39,12 +41,10 @@ if __name__ == "__main__":
     # tooth = 'tooth_2_0.9_None_top_1_77_254_412'
 
     # Initialize gym environment
-    policy_type = ['demo', 'random'][0]
     env = gym.make("DentalEnvPCD-v0", render_mode="human", max_episode_steps=1000, tooth=tooth)
     state, info = env.reset(seed=42)
 
-    # demos = np.loadtxt(f'dental_env/demos_augmented/coverage/{tooth}.csv', delimiter=' ')
-    demos = np.loadtxt(f'dental_env/demos_augmented/traction/{tooth}.csv', delimiter=' ')
+    demos = np.loadtxt(f'dental_env/demos_augmented/{model}/{tooth}.csv', delimiter=' ')
     time_steps = len(demos)
 
     total_reward = 0
@@ -90,4 +90,3 @@ if __name__ == "__main__":
         #     env.close()
         #     observation, info = env.reset()
     env.close()
-    # np.savetxt("demo_cutpath.csv", np.array(paths), delimiter=',')

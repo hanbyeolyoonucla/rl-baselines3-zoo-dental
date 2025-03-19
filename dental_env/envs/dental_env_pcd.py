@@ -38,7 +38,7 @@ class DentalEnvPCD(gym.Env):
         # Initialize segmentations
         if self._tooth:
             self._state_init = np.load(f'dental_env/labels_augmented/{self._tooth}.npy')
-        self._tooth_dir = f'dental_env/labels_augmented/'
+        self._tooth_dir = f'dental_env/labels_augmented/rollout/'
         self._state_shape = np.array([60, 60, 60])
         self._state_label = {"decay": 1, "enamel": 2, "dentin": 3}
         self._channel = len(self._state_label)

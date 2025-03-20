@@ -14,23 +14,31 @@ from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
 import h5py
 from imitation.data.types import TrajectoryWithRew, DictObs
+import os
+from tqdm import tqdm
+import wandb
+from stable_baselines3.common.logger import configure
+from imitation.util.logger import HierarchicalLogger
 
-tnums = [2, 4, 5]
-cut_types = ['top']
+model = 'traction'
+model_dir = f'dental_env/demos_augmented/{model}_hdf5'
+dirlist = os.listdir(model_dir)
 train_trajectories = []
-for tnum in tnums:
-    for cut_type in cut_types:
-        with h5py.File(f'dental_env/demos_augmented/traction_hdf5/tooth_{tnum}_{cut_type}.hdf5', 'r') as f:
-            for demo in f.keys():
-                dictobs = dict(voxel=f[demo]['obs']['voxel'][:],
-                            burr_pos=f[demo]['obs']['burr_pos'][:],
-                            burr_rot=f[demo]['obs']['burr_rot'][:])
-                trajectory = TrajectoryWithRew(obs=DictObs(dictobs),
-                                            acts=f[demo]['acts'][:],  # .astype(int)+1
-                                            infos=f[demo]['info']['is_success'][:],
-                                            rews=f[demo]['rews'][:],
-                                            terminal=True)
-                train_trajectories.append(trajectory)
+for fname in tqdm(dirlist):
+    if not fname.endswith('hdf5') or 'tooth_3' in fname:
+        continue
+    with h5py.File(f'{model_dir}/{fname}', 'r') as f:
+        for demo in f.keys():
+            dictobs = dict(voxel=f[demo]['obs']['voxel'][:],
+                        burr_pos=f[demo]['obs']['burr_pos'][:],
+                        burr_rot=f[demo]['obs']['burr_rot'][:])
+            trajectory = TrajectoryWithRew(obs=DictObs(dictobs),
+                                        acts=f[demo]['acts'][:],  # .astype(int)+1
+                                        infos=f[demo]['info']['is_success'][:],
+                                        rews=f[demo]['rews'][:],
+                                        terminal=True)
+            train_trajectories.append(trajectory)
+print(f'num_trajectries: {len(train_trajectories)}')
 train_transitions = rollout.flatten_trajectories(train_trajectories)
 
 env = gym.make("DentalEnvPCD-v0", max_episode_steps=500)
@@ -45,16 +53,16 @@ bc_trainer = bc.BC(
     action_space=env.action_space,
     batch_size=512,
     demonstrations=train_transitions,
-    policy=policy,  # .load('dental_env/demonstrations/bc_policy_ct_action_6')
+    policy=policy.load(f'dental_env/demos_augmented/bc_{model}_policy'),  # .load(f'dental_env/demos_augmented/bc_{model}_policy')
     rng=rng,
 )
 
 # train for 100 epochs
-bc_trainer.train(n_epochs=10, log_interval=1, log_rollouts_venv=vec_env, log_rollouts_n_episodes=5)
+bc_trainer.train(n_epochs=10, log_interval=1000, log_rollouts_venv=vec_env, log_rollouts_n_episodes=5)
 
 # rollout
 # reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
 # print(f"Reward after training: {reward_after_training}")
 
 # save
-bc_trainer.policy.save('dental_env/demos_augmented/bc_traction_policy')
+bc_trainer.policy.save(f'dental_env/demos_augmented/bc_{model}_policy_2')

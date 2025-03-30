@@ -145,7 +145,7 @@ class IBRLPolicy(BasePolicy):
         n_critics: int = 2,
         share_features_extractor: bool = True,
         bc_policy: Optional[BasePolicy] = None,
-        bc_policy_path: str = 'dental_env/demonstrations/bc_policy_ct_action_7',
+        bc_policy_path: str = 'dental_env/demos_augmented/bc_traction_policy_4',
     ):
         super().__init__(
             observation_space,

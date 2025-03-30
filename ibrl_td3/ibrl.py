@@ -5,6 +5,7 @@ import torch as th
 from gymnasium import spaces
 from torch.nn import functional as F
 import h5py
+import os
 
 from stable_baselines3.common.buffers import ReplayBuffer, DictReplayBuffer
 from stable_baselines3.common.noise import ActionNoise, NormalActionNoise
@@ -167,21 +168,24 @@ class IBRL(OffPolicyAlgorithm):
                 optimize_memory_usage=self.optimize_memory_usage,
                 **self.replay_buffer_kwargs,
             )
-        with h5py.File(self.bc_replay_buffer_path, 'r') as f:
-            for demo in f.keys():
-                for i in range(len(f[demo]['acts'][:])):
-                    self.bc_replay_buffer.add(
-                        obs=dict(voxel=f[demo]['obs']['voxel'][i],
-                                 burr_pos=f[demo]['obs']['burr_pos'][i],
-                                 burr_rot=f[demo]['obs']['burr_rot'][i]),
-                        next_obs=dict(voxel=f[demo]['obs']['voxel'][i+1],
-                                      burr_pos=f[demo]['obs']['burr_pos'][i+1],
-                                      burr_rot=f[demo]['obs']['burr_rot'][i+1]),
-                        action=f[demo]['acts'][i],
-                        reward=f[demo]['rews'][i],
-                        done=f[demo]['info']['is_success'][i],
-                        infos=[dict(placeholder=None)]
-                    )
+        for fname in os.listdir(self.bc_replay_buffer_path):
+            if not fname.endswith('hdf5') or 'tooth_3' in fname:
+                continue
+            with h5py.File(f'{self.bc_replay_buffer_path}/{fname}', 'r') as f:
+                for demo in f.keys():
+                    for i in range(len(f[demo]['acts'][:])):
+                        self.bc_replay_buffer.add(
+                            obs=dict(voxel=f[demo]['obs']['voxel'][i],
+                                    burr_pos=f[demo]['obs']['burr_pos'][i],
+                                    burr_rot=f[demo]['obs']['burr_rot'][i]),
+                            next_obs=dict(voxel=f[demo]['obs']['voxel'][i+1],
+                                        burr_pos=f[demo]['obs']['burr_pos'][i+1],
+                                        burr_rot=f[demo]['obs']['burr_rot'][i+1]),
+                            action=f[demo]['acts'][i],
+                            reward=f[demo]['rews'][i],
+                            done=f[demo]['info']['is_success'][i],
+                            infos=[dict(placeholder=None)]
+                        )
 
         self._create_aliases()
         # Running mean and running var

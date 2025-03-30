@@ -17,7 +17,7 @@ from spatialmath import UnitQuaternion
 if __name__ == "__main__":
 
     # tooth
-    policy_type = ['demo', 'random'][0]
+    policy_type = ['demo', 'random', 'IL'][0]
     model = ['coverage', 'traction', 'human'][0]
     tooth_dir = f'dental_env/demos_augmented/{model}'
     dirlist = os.listdir(tooth_dir)
@@ -41,11 +41,18 @@ if __name__ == "__main__":
     # tooth = 'tooth_2_0.9_None_top_1_77_254_412'
 
     # Initialize gym environment
-    env = gym.make("DentalEnvPCD-v0", render_mode="human", max_episode_steps=1000, tooth=tooth)
+    env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=1000, tooth=tooth)
     state, info = env.reset(seed=42)
 
     demos = np.loadtxt(f'dental_env/demos_augmented/{model}/{tooth}.csv', delimiter=' ')
     time_steps = len(demos)
+
+    if policy_type == "IL":
+        policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
+                                                action_space=env.action_space,
+                                                lr_schedule=get_schedule_fn(0.003),
+                                                **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
+        policy = policy.load('dental_env/demos_augmented/bc_traction_policy_4')
 
     total_reward = 0
     total_collisions = 0
@@ -56,6 +63,8 @@ if __name__ == "__main__":
             quat_action = UnitQuaternion(demos[itr, 3:]).inv() * UnitQuaternion(demos[itr+1, 3:])
             rpy_action = quat_action.rpy(unit='deg')
             action = np.concatenate((pos_action, rpy_action))
+        elif policy_type == "IL":
+            action, _ = policy.predict(state, deterministic=True)
         else:
             action = env.action_space.sample()
         state, reward, terminated, truncated, info = env.step(action)

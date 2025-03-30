@@ -19,14 +19,14 @@ import pickle
 
 # Define train configs
 config = dict(
-    total_timesteps=50_000,
-    buffer_size=10_000,
-    bc_buffer_size=1_504,
-    learning_starts=500,
+    total_timesteps=5_000_000,
+    buffer_size=50_000,
+    bc_buffer_size=25_000,
+    learning_starts=1_000,
     learning_rate=1e-4,
-    batch_size=256,
+    batch_size=512,
     rl_bc_batch_ratio=0.5,
-    train_freq=1,
+    train_freq=(1, "episode"),
     tau=0.01,
     action_noise_mu=0,
     action_noise_std=0.1,
@@ -40,11 +40,7 @@ config = dict(
                 net_arch=dict(pi=[128, 128], qf=[400, 300]),
                 normalize_images=False
             ),
-    env_max_episode_steps=500,
-    env_tnum=5,
-    env_down_sample=10,
-    env_reward="original",
-    env_use_log_reward=False
+    env_max_episode_steps=200,
 )
 
 # Initiate train logger (wandb)
@@ -59,14 +55,9 @@ with open(f'models/configs/ibrl_{run.id}_v1.pkl', 'wb') as f:
     pickle.dump(config, f)
 
 # Define environment
-tnum = config["env_tnum"]
-env = gym.make("DentalEnv6D-v0",
+env = gym.make("DentalEnvPCD-v0",
                render_mode=None,
-               max_episode_steps=config["env_max_episode_steps"],
-               down_sample=config["env_down_sample"],
-               tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
-if config["env_use_log_reward"]:
-    env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
+               max_episode_steps=config["env_max_episode_steps"],)
 
 # Define train model
 model = IBRL("MultiInputPolicy", env, verbose=1,
@@ -83,7 +74,7 @@ model = IBRL("MultiInputPolicy", env, verbose=1,
              target_noise_clip=config["target_policy_clip"],
              model_save_freq=config['total_timesteps']//3,  # don't save
              model_save_path=f'D:/dental_RL_data/models/ibrl_{run.id}',
-             bc_replay_buffer_path=f'dental_env/demonstrations/train_dataset_scaled_reward.hdf5',
+             bc_replay_buffer_path=f'dental_env/demos_augmented/traction_hdf5',
              tensorboard_log=f"runs/ibrl_{run.id}",
              policy_kwargs=config['policy_kwargs'])
 model.learn(total_timesteps=config["total_timesteps"],

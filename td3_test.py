@@ -17,15 +17,16 @@ from hyperparams.python.ppo_config import CustomCombinedExtractor
 from stable_baselines3.common.noise import NormalActionNoise
 from gymnasium.wrappers import TransformReward
 import pickle
+import yaml
 
 # Define train configs
 config = dict(
-    total_timesteps=10_000,
-    buffer_size=5_000,
-    learning_starts=500,
+    total_timesteps=100_000,
+    buffer_size=50_000,
+    learning_starts=10_000,
     learning_rate=1e-4,
-    batch_size=256,
-    train_freq=1,
+    batch_size=512,
+    train_freq=(1, "episode"),
     tau=0.01,
     action_noise_mu=0,
     action_noise_std=0.1,
@@ -39,11 +40,7 @@ config = dict(
                 net_arch=dict(pi=[128, 128], qf=[400, 300]),
                 normalize_images=False
             ),
-    env_max_episode_steps=500,
-    env_tnum=5,
-    env_down_sample=10,
-    env_reward="original",
-    env_use_log_reward=False
+    env_max_episode_steps=200,
 )
 
 # Initiate train logger (wandb)
@@ -52,20 +49,15 @@ run = wandb.init(
     config=config,
     sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
 )
-
+# wandb.tensorboard.patch(root_logdir=f"./runs/dental_td3_{run.id}/")
 # Save config pickle
-with open(f'models/configs/td3_{run.id}_v1.pkl', 'wb') as f:
+with open(f'models/configs/dental_td3_{run.id}.pkl', 'wb') as f:
     pickle.dump(config, f)
 
 # Define environment
-tnum = config["env_tnum"]
-env = gym.make("DentalEnv6D-v0",
+env = gym.make("DentalEnvPCD-v0",
                render_mode=None,
-               max_episode_steps=config["env_max_episode_steps"],
-               down_sample=config["env_down_sample"],
-               tooth=f"tooth_{tnum}_1.0_0_0_0_0_0_0")
-if config["env_use_log_reward"]:
-    env = TransformReward(env, lambda r: np.sign(r) * np.log(1+np.abs(r)))
+               max_episode_steps=config["env_max_episode_steps"],)
 
 # Define train model
 model = TD3("MultiInputPolicy", env, verbose=1,
@@ -78,12 +70,12 @@ model = TD3("MultiInputPolicy", env, verbose=1,
             policy_delay=config["policy_delay"],
             target_policy_noise=config["target_policy_noise"],
             target_noise_clip=config["target_policy_clip"],
-            tensorboard_log=f"runs/td3_{run.id}",
+            tensorboard_log=f"runs/dental_td3_{run.id}",
             action_noise=NormalActionNoise(config["action_noise_mu"]*np.ones(6), config["action_noise_std"]*np.ones(6)),
             policy_kwargs=config['policy_kwargs'])
 
 # Prefill replay buffer with demonstration dataset
-with h5py.File(f'dental_env/demonstrations/train_dataset_scaled_reward.hdf5', 'r') as f:
+with h5py.File(f'dental_env/demos_augmented/traction_hdf5/tooth_3_top.hdf5', 'r') as f:
     for demo in f.keys():
         for i in range(len(f[demo]['acts'][:])):
             model.replay_buffer.add(
@@ -102,9 +94,9 @@ model.learn(total_timesteps=config["total_timesteps"],
             tb_log_name=f'first_run',
             reset_num_timesteps=True,
             progress_bar=True,
-            )
+            callback=WandbCallback(verbose=2))
 
 # Save train results and replay buffer for continuing training
-model.save(f'models/td3_{run.id}_v1')
-model.save_replay_buffer(f'models/replay_buffer/td3_{run.id}_v1')
+model.save(f'models/dental_td3_{run.id}')
+model.save_replay_buffer(f'models/replay_buffer/dental_td3_{run.id}')
 run.finish()

@@ -53,16 +53,16 @@ bc_trainer = bc.BC(
     action_space=env.action_space,
     batch_size=512,
     demonstrations=train_transitions,
-    policy=policy.load(f'dental_env/demos_augmented/bc_{model}_policy'),  # .load(f'dental_env/demos_augmented/bc_{model}_policy')
+    policy=policy.load(f'dental_env/demos_augmented/bc_{model}_policy_4'),  # .load(f'dental_env/demos_augmented/bc_{model}_policy')
     rng=rng,
 )
 
-# train for 100 epochs
-bc_trainer.train(n_epochs=10, log_interval=1000, log_rollouts_venv=vec_env, log_rollouts_n_episodes=5)
+# train for 100 epochs  # 10/100/100/300/500
+bc_trainer.train(n_epochs=500, log_interval=10000, log_rollouts_venv=vec_env, log_rollouts_n_episodes=5)
 
 # rollout
 # reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
 # print(f"Reward after training: {reward_after_training}")
 
 # save
-bc_trainer.policy.save(f'dental_env/demos_augmented/bc_{model}_policy_2')
+bc_trainer.policy.save(f'dental_env/demos_augmented/bc_{model}_policy_5')

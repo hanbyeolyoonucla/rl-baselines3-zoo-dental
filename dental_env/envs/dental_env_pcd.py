@@ -273,7 +273,7 @@ class DentalEnvPCD(gym.Env):
         self._states[self._state_label['dentin']-1, dentin_idx[:, 0], dentin_idx[:, 1], dentin_idx[:, 2]] = 1
 
         # termination
-        terminated = ~np.any(self._states[self._state_label['decay']-1])  # or reward_dentin_removal > 0  # no more decay
+        terminated = ~np.any(self._states[self._state_label['decay']-1]) or self._collision # or reward_dentin_removal > 0  # no more decay
 
         observation = self._get_obs()
         info = self._get_info()

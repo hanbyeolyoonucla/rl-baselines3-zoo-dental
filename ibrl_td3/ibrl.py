@@ -168,11 +168,16 @@ class IBRL(OffPolicyAlgorithm):
                 optimize_memory_usage=self.optimize_memory_usage,
                 **self.replay_buffer_kwargs,
             )
+        bc_replay_num = 0
         for fname in os.listdir(self.bc_replay_buffer_path):
-            if not fname.endswith('hdf5') or 'tooth_3' in fname:
+            if bc_replay_num > self.bc_buffer_size:
+                break
+            if not fname.endswith('hdf5') or 'tooth_3' not in fname or 'left' in fname or 'right' in fname:
                 continue
             with h5py.File(f'{self.bc_replay_buffer_path}/{fname}', 'r') as f:
                 for demo in f.keys():
+                    if 'tooth_3_1.0' not in demo:
+                        continue
                     for i in range(len(f[demo]['acts'][:])):
                         self.bc_replay_buffer.add(
                             obs=dict(voxel=f[demo]['obs']['voxel'][i],
@@ -186,6 +191,9 @@ class IBRL(OffPolicyAlgorithm):
                             done=f[demo]['info']['is_success'][i],
                             infos=[dict(placeholder=None)]
                         )
+                        bc_replay_num += 1
+                        if bc_replay_num % 100 == 0:
+                            print(f'current bc replay buffer filled: {bc_replay_num} / {self.bc_buffer_size}')
 
         self._create_aliases()
         # Running mean and running var
@@ -206,7 +214,7 @@ class IBRL(OffPolicyAlgorithm):
         state: Optional[tuple[np.ndarray, ...]] = None,
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = False,
-        use_actor_target: bool = True,
+        use_actor_target: bool = False,
     ) -> tuple[np.ndarray, Optional[tuple[np.ndarray, ...]]]:
         """
         Get the policy action from an observation (and optional hidden state).

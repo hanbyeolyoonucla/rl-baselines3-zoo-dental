@@ -17,7 +17,7 @@ from spatialmath import UnitQuaternion
 if __name__ == "__main__":
 
     # tooth
-    policy_type = ['demo', 'random', 'IL'][0]
+    policy_type = ['demo', 'random', 'IL'][2]
     model = ['coverage', 'traction', 'human'][0]
     tooth_dir = f'dental_env/demos_augmented/{model}'
     dirlist = os.listdir(tooth_dir)
@@ -31,14 +31,14 @@ if __name__ == "__main__":
     # tooth = 'tooth_4_1.0_None_right_0_223_135_415'
     # tooth = 'tooth_2_0.9_0_left_2_266_295_346'
     # tooth = 'tooth_2_0.9_1_left_2_241_309_379'
-    tooth = 'tooth_2_0.9_0_right_0_109_229_379'
+    # tooth = 'tooth_2_0.9_0_right_0_109_229_379'
     # tooth = 'tooth_2_1.0_0_right_0_131_250_416'
     # tooth = 'tooth_2_1.0_0_top_1_251_287_464'
     # tooth = 'tooth_2_1.0_1_top_1_91_279_464'
     # tooth = 'tooth_2_1.0_None_top_1_91_287_464'
     # tooth = 'tooth_2_0.9_0_top_1_221_254_412'
     # tooth = 'tooth_2_0.9_1_top_1_77_246_412'
-    # tooth = 'tooth_2_0.9_None_top_1_77_254_412'
+    # tooth = 'tooth_3_1.0_None_top_0_144_279_508'
 
     # Initialize gym environment
     env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=1000, tooth=tooth)
@@ -52,7 +52,7 @@ if __name__ == "__main__":
                                                 action_space=env.action_space,
                                                 lr_schedule=get_schedule_fn(0.003),
                                                 **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
-        policy = policy.load('dental_env/demos_augmented/bc_traction_policy_4')
+        policy = policy.load('dental_env/demos_augmented/bc_traction_policy_tooth3_2')
 
     total_reward = 0
     total_collisions = 0

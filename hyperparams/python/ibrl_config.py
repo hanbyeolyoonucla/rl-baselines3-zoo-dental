@@ -33,19 +33,21 @@ class CustomCNN3D(BaseFeaturesExtractor):
         # Re-ordering will be done by pre-preprocessing or wrapper
         n_input_channels = observation_space.shape[0]
         self.cnn = nn.Sequential(
-            nn.Conv3d(n_input_channels, 32, kernel_size=8, stride=4),
+            nn.Conv3d(n_input_channels, 32, kernel_size=3, stride=1, padding=1),
+            nn.LayerNorm(),
             nn.ReLU(),
-            nn.Conv3d(32, 64, kernel_size=5, stride=2),
+            nn.Conv3d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.LayerNorm(),
             nn.ReLU(),
-            nn.Conv3d(64, 64, kernel_size=3, stride=2),
+            nn.Conv3d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.LayerNorm(),
             nn.ReLU(),
-            # original structure
-            # nn.Conv3d(4, 32, kernel_size=8, stride=4, padding=0),
-            # nn.ReLU(),
-            # nn.Conv3d(32, 64, kernel_size=4, stride=2, padding=0),
-            # nn.ReLU(),
-            # nn.Conv3d(64, 64, kernel_size=3, stride=1, padding=0),
-            # nn.ReLU(),
+            nn.Conv3d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.LayerNorm(),
+            nn.ReLU(),
+            nn.Conv3d(256, 512, kernel_size=3, stride=2, padding=1),
+            nn.LayerNorm(),
+            nn.ReLU(),
             nn.Flatten(),
         )
 
@@ -53,7 +55,7 @@ class CustomCNN3D(BaseFeaturesExtractor):
         with th.no_grad():
             n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None]).float()).shape[1]
 
-        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
+        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.LayerNorm(), nn.ReLU())
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
@@ -78,6 +80,8 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         self,
         observation_space: spaces.Dict,
         cnn_output_dim: int = 1024,
+        pos_output_dim: int = 64,
+        rot_output_dim: int = 64,
         # normalized_image: bool = False,
     ) -> None:
         super().__init__(observation_space, features_dim=1)
@@ -89,6 +93,14 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
             if key == 'voxel':
                 extractors[key] = CustomCNN3D(subspace, features_dim=cnn_output_dim)
                 total_concat_size += cnn_output_dim
+            elif key == 'bur_pos':
+                # The observation key is a vector, flatten it if needed
+                extractors[key] = nn.Sequential(nn.Linear(subspace, pos_output_dim), nn.LayerNorm(), nn.ReLU())
+                total_concat_size += get_flattened_obs_dim(pos_output_dim)
+            elif key == 'bur_rot':
+                # The observation key is a vector, flatten it if needed
+                extractors[key] = nn.Sequential(nn.Linear(subspace, rot_output_dim), nn.LayerNorm(), nn.ReLU())
+                total_concat_size += get_flattened_obs_dim(rot_output_dim)
             else:
                 # The observation key is a vector, flatten it if needed
                 extractors[key] = nn.Flatten()
@@ -105,7 +117,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         return th.cat(encoded_tensor_list, dim=1)
 
 hyperparams = {
-    "DentalEnv6D-v0": dict(
+    "DentalEnvPCD-v0": dict(
         # env_wrapper=[{"gymnasium.wrappers.TimeLimit": {"max_episode_steps": 100}}],
         # normalize=True,
         n_envs=4,
@@ -125,8 +137,8 @@ hyperparams = {
         policy_kwargs=dict(
             activation_fn=nn.ReLU,
             features_extractor_class=CustomCombinedExtractor,
-            features_extractor_kwargs=dict(cnn_output_dim=256),
-            net_arch=dict(pi=[128,128], vf=[128,128]),
+            features_extractor_kwargs=dict(cnn_output_dim=1024),
+            net_arch=dict(pi=[1024,1024], qf=[1024,1024]),
             normalize_images=False
         ),
     )

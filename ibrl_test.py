@@ -19,10 +19,10 @@ import pickle
 
 # Define train configs
 config = dict(
-    total_timesteps=5_000_000,
-    buffer_size=50_000,
-    bc_buffer_size=25_000,
-    learning_starts=1_000,
+    total_timesteps=500_000,
+    buffer_size=20_000,
+    bc_buffer_size=10_000,
+    learning_starts=500,
     learning_rate=1e-4,
     batch_size=512,
     rl_bc_batch_ratio=0.5,
@@ -36,8 +36,8 @@ config = dict(
     policy_kwargs=dict(
                 activation_fn=nn.ReLU,
                 features_extractor_class=CustomCombinedExtractor,
-                features_extractor_kwargs=dict(cnn_output_dim=256),
-                net_arch=dict(pi=[128, 128], qf=[400, 300]),
+                features_extractor_kwargs=dict(cnn_output_dim=1024),
+                net_arch=dict(pi=[1024, 1024], qf=[1024, 1024]),
                 normalize_images=False
             ),
     env_max_episode_steps=200,
@@ -57,7 +57,8 @@ with open(f'models/configs/ibrl_{run.id}_v1.pkl', 'wb') as f:
 # Define environment
 env = gym.make("DentalEnvPCD-v0",
                render_mode=None,
-               max_episode_steps=config["env_max_episode_steps"],)
+               max_episode_steps=config["env_max_episode_steps"],
+               tooth='tooth_3_1.0_None_top_0_144_313_508')
 
 # Define train model
 model = IBRL("MultiInputPolicy", env, verbose=1,
@@ -72,8 +73,8 @@ model = IBRL("MultiInputPolicy", env, verbose=1,
              policy_delay=config["policy_delay"],
              target_policy_noise=config["target_policy_noise"],
              target_noise_clip=config["target_policy_clip"],
-             model_save_freq=config['total_timesteps']//3,  # don't save
-             model_save_path=f'D:/dental_RL_data/models/ibrl_{run.id}',
+             model_save_freq=config['total_timesteps']//5,  # don't save
+             model_save_path=f'models/ibrl_{run.id}',
              bc_replay_buffer_path=f'dental_env/demos_augmented/traction_hdf5',
              tensorboard_log=f"runs/ibrl_{run.id}",
              policy_kwargs=config['policy_kwargs'])

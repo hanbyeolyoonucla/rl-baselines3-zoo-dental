@@ -13,7 +13,7 @@ from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, DictReplayBufferSamples
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
-from ibrl_td3.policies import Actor, MlpPolicy, CnnPolicy, MultiInputPolicy, IBRLPolicy
+from ibrl_td3.policies import Actor, Critic, MlpPolicy, CnnPolicy, MultiInputPolicy, IBRLPolicy
 
 SelfIBRL = TypeVar("SelfIBRL", bound="IBRL")
 
@@ -78,8 +78,8 @@ class IBRL(OffPolicyAlgorithm):
     policy: IBRLPolicy
     actor: Actor
     actor_target: Actor
-    critic: ContinuousCritic
-    critic_target: ContinuousCritic
+    critic: Critic
+    critic_target: Critic
 
     def __init__(
             self,
@@ -97,7 +97,7 @@ class IBRL(OffPolicyAlgorithm):
             model_save_freq: int = 10_000,
             model_save_path: str = f'models/',
             gradient_steps: int = 1,
-            action_noise: Optional[ActionNoise] = NormalActionNoise(0*np.ones(6), 0.2*np.ones(6)),
+            action_noise: Optional[ActionNoise] = None,  # NormalActionNoise(0*np.ones(6), 0.2*np.ones(6)),
             replay_buffer_class: Optional[type[ReplayBuffer]] = None,
             replay_buffer_kwargs: Optional[dict[str, Any]] = None,
             bc_replay_buffer_path: str = 'dental_env/demonstrations/train_dataset.hdf5',
@@ -214,7 +214,7 @@ class IBRL(OffPolicyAlgorithm):
         state: Optional[tuple[np.ndarray, ...]] = None,
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = False,
-        use_actor_target: bool = False,
+        use_actor_proposal: bool = True,
     ) -> tuple[np.ndarray, Optional[tuple[np.ndarray, ...]]]:
         """
         Get the policy action from an observation (and optional hidden state).
@@ -229,7 +229,7 @@ class IBRL(OffPolicyAlgorithm):
         :return: the model's action and the next hidden state
             (used in recurrent policies)
         """
-        return self.policy.predict(observation, state, episode_start, deterministic, use_actor_target)
+        return self.policy.predict(observation, state, episode_start, deterministic, use_actor_proposal)
 
     def train(self, gradient_steps: int, batch_size: int = 100) -> None:
         # Switch to train mode (this affects batch norm / dropout)

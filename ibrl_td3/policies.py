@@ -362,21 +362,7 @@ class IBRLPolicy(BasePolicy):
         return self._predict(obs, deterministic=deterministic)
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
-        # TODO: ibrl_sac with actor and ibrl_sac with actor target
-        rl_actions = self.actor.forward(observation)
-        bc_actions, _, _ = self.bc_policy.forward(observation, deterministic=deterministic)
-        rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
-        bsize, num_actions, _ = rl_bc_actions.size()
-
-        rl_q_values = th.cat(self.critic_target(observation, rl_actions), dim=1)
-        rl_q_values, _ = th.min(rl_q_values, dim=1, keepdim=True)
-        bc_q_values = th.cat(self.critic_target(observation, bc_actions), dim=1)
-        bc_q_values, _ = th.min(bc_q_values, dim=1, keepdim=True)
-        rl_bc_q_values = th.cat((rl_q_values, bc_q_values), dim=1)
-        greedy_action_idx = rl_bc_q_values.argmax(dim=1)
-        greedy_action = rl_bc_actions[range(bsize), greedy_action_idx]
-
-        return greedy_action  # self.actor(observation)
+        return self.actor_target(observation)
 
     def predict(
         self,
@@ -384,7 +370,7 @@ class IBRLPolicy(BasePolicy):
         state: Optional[tuple[np.ndarray, ...]] = None,
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = False,
-        use_actor_target: bool = False,
+        use_actor_proposal: bool = True,
     ) -> tuple[np.ndarray, Optional[tuple[np.ndarray, ...]]]:
         """
         Get the policy action from an observation (and optional hidden state).
@@ -416,8 +402,21 @@ class IBRLPolicy(BasePolicy):
         obs_tensor, vectorized_env = self.obs_to_tensor(observation)
 
         with th.no_grad():
-            if use_actor_target:
-                actions = self.actor_target(obs_tensor)
+            if use_actor_proposal:
+                # actions = self.actor_target(obs_tensor)
+                bc_actions, _, _ = self.bc_policy.forward(obs_tensor, deterministic=deterministic)
+                rl_noises = bc_actions.clone().data.normal_(0, 0.2)
+                rl_actions = (self.actor_target.forward(obs_tensor) + rl_noises).clamp(-1, 1)
+                rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
+                bsize, num_actions, _ = rl_bc_actions.size()
+
+                rl_q_values = th.cat(self.critic_target(obs_tensor, rl_actions), dim=1)
+                rl_q_values, _ = th.min(rl_q_values, dim=1, keepdim=True)
+                bc_q_values = th.cat(self.critic_target(obs_tensor, bc_actions), dim=1)
+                bc_q_values, _ = th.min(bc_q_values, dim=1, keepdim=True)
+                rl_bc_q_values = th.cat((rl_q_values, bc_q_values), dim=1)
+                greedy_action_idx = rl_bc_q_values.argmax(dim=1)
+                actions = rl_bc_actions[range(bsize), greedy_action_idx]
             else:
                 actions = self._predict(obs_tensor, deterministic=deterministic)
         # Convert to numpy, and reshape to the original action shape

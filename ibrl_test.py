@@ -13,7 +13,7 @@ from ibrl_td3 import IBRL
 import wandb
 from wandb.integration.sb3 import WandbCallback
 from hyperparams.python.td3_config import hyperparams
-from hyperparams.python.ppo_config import CustomCombinedExtractor
+from hyperparams.python.ibrl_config import CustomCombinedExtractor
 from gymnasium.wrappers import TransformReward
 import pickle
 
@@ -28,8 +28,6 @@ config = dict(
     rl_bc_batch_ratio=0.5,
     train_freq=(1, "episode"),
     tau=0.01,
-    action_noise_mu=0,
-    action_noise_std=0.1,
     target_policy_noise=0.1,
     target_policy_clip=0.3,
     policy_delay=5,

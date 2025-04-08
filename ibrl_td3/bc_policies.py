@@ -33,21 +33,21 @@ class CustomNetwork(nn.Module):
         # Policy network
         self.policy_net = nn.Sequential(
             nn.Linear(feature_dim, last_layer_dim_pi),
-            nn.LayerNorm(),
+            nn.LayerNorm(last_layer_dim_pi),
             nn.Dropout(p=0.5, inplace=False),
             nn.ReLU(),
             nn.Linear(last_layer_dim_pi, last_layer_dim_pi),
-            nn.LayerNorm(),
+            nn.LayerNorm(last_layer_dim_pi),
             nn.Dropout(p=0.5, inplace=False),
             nn.ReLU()
         )
         # Value network
         self.value_net = nn.Sequential(
             nn.Linear(feature_dim, last_layer_dim_vf),
-            nn.LayerNorm(),
+            nn.LayerNorm(last_layer_dim_vf),
             nn.ReLU(),
             nn.Linear(last_layer_dim_pi, last_layer_dim_vf),
-            nn.LayerNorm(),
+            nn.LayerNorm(last_layer_dim_vf),
             nn.ReLU()
         )
 
@@ -68,7 +68,7 @@ class CustomNetwork(nn.Module):
 class CustomActorCriticPolicy(MultiInputActorCriticPolicy):
     def __init__(
         self,
-        observation_space: spaces.Space,
+        observation_space: spaces.Dict,
         action_space: spaces.Space,
         lr_schedule: Callable[[float], float],
         *args,

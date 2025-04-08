@@ -161,14 +161,14 @@ class Critic(BaseModel):
             # q_net_list = create_mlp(features_dim + action_dim, 1, net_arch, activation_fn)
             if len(net_arch) > 0:
                 q_net_list = [nn.Linear(features_dim + action_dim, net_arch[0], bias=True),
-                              nn.Layernorm(),
+                              nn.LayerNorm(net_arch[0]),
                               activation_fn(),]
             else:
                 q_net_list = []
 
             for idx in range(len(net_arch) - 1):
                 q_net_list.append(nn.Linear(net_arch[idx], net_arch[idx + 1], bias=True))
-                q_net_list.append(nn.Layernorm())
+                q_net_list.append(nn.LayerNorm(net_arch[idx + 1]))
                 q_net_list.append(activation_fn())
 
             if action_dim > 0:
@@ -406,7 +406,7 @@ class IBRLPolicy(BasePolicy):
                 # actions = self.actor_target(obs_tensor)
                 bc_actions, _, _ = self.bc_policy.forward(obs_tensor, deterministic=deterministic)
                 rl_noises = bc_actions.clone().data.normal_(0, 0.2)
-                rl_actions = (self.actor_target.forward(obs_tensor) + rl_noises).clamp(-1, 1)
+                rl_actions = (self.actor.forward(obs_tensor) + rl_noises).clamp(-1, 1)
                 rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
                 bsize, num_actions, _ = rl_bc_actions.size()
 

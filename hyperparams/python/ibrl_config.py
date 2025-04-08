@@ -32,21 +32,22 @@ class CustomCNN3D(BaseFeaturesExtractor):
         # We assume CxDXHxW images (channels first)
         # Re-ordering will be done by pre-preprocessing or wrapper
         n_input_channels = observation_space.shape[0]
+        depth, height, width = observation_space.shape[1:]
         self.cnn = nn.Sequential(
             nn.Conv3d(n_input_channels, 32, kernel_size=3, stride=1, padding=1),
-            nn.LayerNorm(),
+            nn.LayerNorm([depth, height, width]),
             nn.ReLU(),
             nn.Conv3d(32, 64, kernel_size=3, stride=2, padding=1),
-            nn.LayerNorm(),
+            nn.LayerNorm([depth//2, height//2, width//2]),
             nn.ReLU(),
             nn.Conv3d(64, 128, kernel_size=3, stride=2, padding=1),
-            nn.LayerNorm(),
+            nn.LayerNorm([depth//4, height//4, width//4]),
             nn.ReLU(),
             nn.Conv3d(128, 256, kernel_size=3, stride=2, padding=1),
-            nn.LayerNorm(),
+            nn.LayerNorm([depth//8, height//8, width//8]),
             nn.ReLU(),
             nn.Conv3d(256, 512, kernel_size=3, stride=2, padding=1),
-            nn.LayerNorm(),
+            nn.LayerNorm([depth//16, height//16, width//16]),
             nn.ReLU(),
             nn.Flatten(),
         )
@@ -55,7 +56,7 @@ class CustomCNN3D(BaseFeaturesExtractor):
         with th.no_grad():
             n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None]).float()).shape[1]
 
-        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.LayerNorm(), nn.ReLU())
+        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.LayerNorm(features_dim), nn.ReLU())
 
     def forward(self, observations: th.Tensor) -> th.Tensor:
         return self.linear(self.cnn(observations))
@@ -95,12 +96,12 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
                 total_concat_size += cnn_output_dim
             elif key == 'bur_pos':
                 # The observation key is a vector, flatten it if needed
-                extractors[key] = nn.Sequential(nn.Linear(subspace, pos_output_dim), nn.LayerNorm(), nn.ReLU())
-                total_concat_size += get_flattened_obs_dim(pos_output_dim)
+                extractors[key] = nn.Sequential(nn.Linear(subspace.shape[0], pos_output_dim), nn.LayerNorm(pos_output_dim), nn.ReLU())
+                total_concat_size += pos_output_dim
             elif key == 'bur_rot':
                 # The observation key is a vector, flatten it if needed
-                extractors[key] = nn.Sequential(nn.Linear(subspace, rot_output_dim), nn.LayerNorm(), nn.ReLU())
-                total_concat_size += get_flattened_obs_dim(rot_output_dim)
+                extractors[key] = nn.Sequential(nn.Linear(subspace.shape[0], rot_output_dim), nn.LayerNorm(rot_output_dim), nn.ReLU())
+                total_concat_size += rot_output_dim
             else:
                 # The observation key is a vector, flatten it if needed
                 extractors[key] = nn.Flatten()

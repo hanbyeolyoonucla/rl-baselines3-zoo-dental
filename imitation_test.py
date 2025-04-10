@@ -28,18 +28,18 @@ model_dir = f'dental_env/demos_augmented/{model}_hdf5'
 dirlist = os.listdir(model_dir)
 train_trajectories = []
 for fname in tqdm(dirlist):
-    if not fname.endswith('hdf5') or 'tooth_3' in fname:
+    if not fname.endswith('hdf5') or 'tooth_3_top' in fname:
         continue
     with h5py.File(f'{model_dir}/{fname}', 'r') as f:
         for demo in f.keys():
             dictobs = dict(voxel=f[demo]['obs']['voxel'][:],
-                        burr_pos=f[demo]['obs']['burr_pos'][:],
-                        burr_rot=f[demo]['obs']['burr_rot'][:])
+                           burr_pos=f[demo]['obs']['burr_pos'][:],
+                           burr_rot=f[demo]['obs']['burr_rot'][:])
             trajectory = TrajectoryWithRew(obs=DictObs(dictobs),
-                                        acts=f[demo]['acts'][:],  # .astype(int)+1
-                                        infos=f[demo]['info']['is_success'][:],
-                                        rews=f[demo]['rews'][:],
-                                        terminal=True)
+                                           acts=f[demo]['acts'][:],  # .astype(int)+1
+                                           infos=f[demo]['info']['is_success'][:],
+                                           rews=f[demo]['rews'][:],
+                                           terminal=True)
             train_trajectories.append(trajectory)
 print(f'num_trajectries: {len(train_trajectories)}')
 train_transitions = rollout.flatten_trajectories(train_trajectories)
@@ -51,9 +51,9 @@ run = wandb.init(
     sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
 )
 
-logger = imitation.util.logger.configure('./runs', format_strs=["stdout", "tensorboard"])
+logger = imitation.util.logger.configure(f'./runs/dental_bc_{run.id}', format_strs=["stdout", "csv", "tensorboard"])
 
-env = gym.make("DentalEnvPCD-v0", max_episode_steps=500)
+env = gym.make("DentalEnvPCD-v0", max_episode_steps=200)
 vec_env = make_vec_env("DentalEnvPCD-v0")
 policy = CustomActorCriticPolicy(observation_space=env.observation_space,
                                  action_space=env.action_space,
@@ -72,15 +72,10 @@ bc_trainer = bc.BC(
     custom_logger=logger
 )
 
-# def on_epoch_end():
-#     bc_trainer.policy.save(f'models/bc_{model}_policy_test')
+n_epoch = 100
+checkpoint = 10  # checkpoint every 100 epoch
+for i in range(n_epoch//checkpoint):
+    bc_trainer.train(n_epochs=checkpoint, log_interval=1000, log_rollouts_venv=vec_env, log_rollouts_n_episodes=10)
+    bc_trainer.policy.save(f'models/bc_{model}_policy_{(i+1)*checkpoint}')
 
-# train for 100 epochs  # 10/100/100/300/500
-bc_trainer.train(n_epochs=10, log_interval=100, log_rollouts_venv=vec_env, log_rollouts_n_episodes=10)
-
-# rollout
-# reward_after_training, _ = evaluate_policy(bc_trainer.policy, env, 10)
-# print(f"Reward after training: {reward_after_training}")
-
-# save
-bc_trainer.policy.save(f'dental_env/demos_augmented/bc_{model}_policy_test')
+run.finish()

@@ -7,6 +7,7 @@ import numpy as np
 
 # from stable_baselines3.common.distributions import SquashedDiagGaussianDistribution, StateDependentNoiseDistribution
 from stable_baselines3.common.policies import BasePolicy, BaseModel, ContinuousCritic, MultiInputActorCriticPolicy
+from ibrl_td3.bc_policies import CustomActorCriticPolicy
 from stable_baselines3.common.preprocessing import get_action_dim
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
@@ -44,6 +45,7 @@ class Actor(BasePolicy):
         features_dim: int,
         activation_fn: type[nn.Module] = nn.ReLU,
         normalize_images: bool = True,
+        share_features_extractor: bool = True,
     ):
         super().__init__(
             observation_space,
@@ -56,6 +58,7 @@ class Actor(BasePolicy):
         self.net_arch = net_arch
         self.features_dim = features_dim
         self.activation_fn = activation_fn
+        self.share_features_extractor = share_features_extractor
 
         action_dim = get_action_dim(self.action_space)
         # actor_net = create_mlp(features_dim, action_dim, net_arch, activation_fn, squash_output=True)
@@ -93,7 +96,10 @@ class Actor(BasePolicy):
 
     def forward(self, obs: th.Tensor) -> th.Tensor:
         # assert deterministic, 'The TD3 actor only outputs deterministic actions'
-        features = self.extract_features(obs, self.features_extractor)
+        # Learn the features extractor using the policy loss only --> HBY: using the critic loss only
+        # when the features_extractor is shared with the actor
+        with th.set_grad_enabled(not self.share_features_extractor):
+            features = self.extract_features(obs, self.features_extractor)
         return self.mu(features)
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
@@ -166,9 +172,9 @@ class Critic(BaseModel):
             else:
                 q_net_list = []
 
-            for idx in range(len(net_arch) - 1):
-                q_net_list.append(nn.Linear(net_arch[idx], net_arch[idx + 1], bias=True))
-                q_net_list.append(nn.LayerNorm(net_arch[idx + 1]))
+            for net_idx in range(len(net_arch) - 1):
+                q_net_list.append(nn.Linear(net_arch[net_idx], net_arch[net_idx + 1], bias=True))
+                q_net_list.append(nn.LayerNorm(net_arch[net_idx + 1]))
                 q_net_list.append(activation_fn())
 
             if action_dim > 0:
@@ -180,10 +186,7 @@ class Critic(BaseModel):
             self.q_networks.append(q_net)
 
     def forward(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, ...]:
-        # Learn the features extractor using the policy loss only
-        # when the features_extractor is shared with the actor
-        with th.set_grad_enabled(not self.share_features_extractor):
-            features = self.extract_features(obs, self.features_extractor)
+        features = self.extract_features(obs, self.features_extractor)  # update feature extractor based on critic loss
         qvalue_input = th.cat([features, actions], dim=1)
         return tuple(q_net(qvalue_input) for q_net in self.q_networks)
 
@@ -241,7 +244,7 @@ class IBRLPolicy(BasePolicy):
         n_critics: int = 2,
         share_features_extractor: bool = True,
         bc_policy: Optional[BasePolicy] = None,
-        bc_policy_path: str = 'dental_env/demos_augmented/bc_traction_policy_4',
+        bc_policy_path: str = 'models/bc_traction_policy_20',
     ):
         super().__init__(
             observation_space,
@@ -291,15 +294,15 @@ class IBRLPolicy(BasePolicy):
     def _build(self, lr_schedule: Schedule) -> None:
 
         # bc policy
-        self.bc_policy = MultiInputActorCriticPolicy(observation_space=self.observation_space,
+        self.bc_policy = CustomActorCriticPolicy(observation_space=self.observation_space,
                                              action_space=self.action_space,
                                              lr_schedule=lr_schedule,)
-                                             # **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
+                                             # **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])  # no need to specify architecture if loading from saved policy
         self.bc_policy = self.bc_policy.load(self.bc_policy_path)
 
         # actor
         # self.actor = self.make_actor(features_extractor=hyperparams["DentalEnv6D-v0"]['policy_kwargs']['features_extractor_class'])
-        self.actor = self.make_actor(features_extractor=None)
+        self.actor = self.make_actor(features_extractor=None)    # should be defined None to create new feature extractor object
         self.actor_target = self.make_actor(features_extractor=None)
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor.optimizer = self.optimizer_class(
@@ -405,7 +408,7 @@ class IBRLPolicy(BasePolicy):
             if use_actor_proposal:
                 # actions = self.actor_target(obs_tensor)
                 bc_actions, _, _ = self.bc_policy.forward(obs_tensor, deterministic=deterministic)
-                rl_noises = bc_actions.clone().data.normal_(0, 0.2)
+                rl_noises = bc_actions.clone().data.normal_(0, 0.1)
                 rl_actions = (self.actor.forward(obs_tensor) + rl_noises).clamp(-1, 1)
                 rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
                 bsize, num_actions, _ = rl_bc_actions.size()

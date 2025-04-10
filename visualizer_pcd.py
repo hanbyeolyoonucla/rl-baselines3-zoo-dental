@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import h5py
 from stable_baselines3.common.policies import MultiInputActorCriticPolicy
+from ibrl_td3.bc_policies import CustomActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
 from hyperparams.python.ppo_config import hyperparams
 from gymnasium.wrappers import TransformReward
@@ -41,18 +42,17 @@ if __name__ == "__main__":
     # tooth = 'tooth_3_1.0_None_top_0_144_279_508'
 
     # Initialize gym environment
-    env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=1000, tooth=tooth)
+    env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=200)
     state, info = env.reset(seed=42)
 
     demos = np.loadtxt(f'dental_env/demos_augmented/{model}/{tooth}.csv', delimiter=' ')
     time_steps = len(demos)
 
     if policy_type == "IL":
-        policy = MultiInputActorCriticPolicy(observation_space=env.observation_space,
+        policy = CustomActorCriticPolicy(observation_space=env.observation_space,
                                                 action_space=env.action_space,
-                                                lr_schedule=get_schedule_fn(0.003),
-                                                **hyperparams["DentalEnv6D-v0"]['policy_kwargs'])
-        policy = policy.load('dental_env/demos_augmented/bc_traction_policy_tooth3_2')
+                                                lr_schedule=get_schedule_fn(0.003))
+        policy = policy.load('models/bc_traction_policy_20')
 
     total_reward = 0
     total_collisions = 0

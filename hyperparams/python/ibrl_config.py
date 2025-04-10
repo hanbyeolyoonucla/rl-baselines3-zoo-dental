@@ -34,19 +34,19 @@ class CustomCNN3D(BaseFeaturesExtractor):
         n_input_channels = observation_space.shape[0]
         depth, height, width = observation_space.shape[1:]
         self.cnn = nn.Sequential(
-            nn.Conv3d(n_input_channels, 32, kernel_size=3, stride=1, padding=1),
+            nn.Conv3d(n_input_channels, 8, kernel_size=3, stride=1, padding=1),  # 32 x 60x60x60
             nn.LayerNorm([depth, height, width]),
             nn.ReLU(),
-            nn.Conv3d(32, 64, kernel_size=3, stride=2, padding=1),
+            nn.Conv3d(8, 16, kernel_size=4, stride=2, padding=1),  # 64 x 30x30x30
             nn.LayerNorm([depth//2, height//2, width//2]),
             nn.ReLU(),
-            nn.Conv3d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.Conv3d(16, 32, kernel_size=4, stride=2, padding=1),  # 128 x 15x15x15
             nn.LayerNorm([depth//4, height//4, width//4]),
             nn.ReLU(),
-            nn.Conv3d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.Conv3d(32, 64, kernel_size=5, stride=2, padding=1),  # 256 x 7x7x7
             nn.LayerNorm([depth//8, height//8, width//8]),
             nn.ReLU(),
-            nn.Conv3d(256, 512, kernel_size=3, stride=2, padding=1),
+            nn.Conv3d(64, 128, kernel_size=5, stride=2, padding=1),  # 512 x 3x3x3
             nn.LayerNorm([depth//16, height//16, width//16]),
             nn.ReLU(),
             nn.Flatten(),
@@ -94,11 +94,11 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
             if key == 'voxel':
                 extractors[key] = CustomCNN3D(subspace, features_dim=cnn_output_dim)
                 total_concat_size += cnn_output_dim
-            elif key == 'bur_pos':
+            elif key == 'burr_pos':
                 # The observation key is a vector, flatten it if needed
                 extractors[key] = nn.Sequential(nn.Linear(subspace.shape[0], pos_output_dim), nn.LayerNorm(pos_output_dim), nn.ReLU())
                 total_concat_size += pos_output_dim
-            elif key == 'bur_rot':
+            elif key == 'burr_rot':
                 # The observation key is a vector, flatten it if needed
                 extractors[key] = nn.Sequential(nn.Linear(subspace.shape[0], rot_output_dim), nn.LayerNorm(rot_output_dim), nn.ReLU())
                 total_concat_size += rot_output_dim

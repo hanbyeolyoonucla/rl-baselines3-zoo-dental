@@ -7,13 +7,11 @@ import numpy as np
 import h5py
 from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
-from hyperparams.python.ppo_config import hyperparams
 from stable_baselines3 import SAC, TD3
 from ibrl_td3 import IBRL
 import wandb
 from wandb.integration.sb3 import WandbCallback
-from hyperparams.python.td3_config import hyperparams
-from hyperparams.python.ppo_config import CustomCombinedExtractor
+from hyperparams.python.ibrl_config import CustomCombinedExtractor
 from stable_baselines3.common.noise import NormalActionNoise
 from gymnasium.wrappers import TransformReward
 import pickle
@@ -21,9 +19,9 @@ import yaml
 
 # Define train configs
 config = dict(
-    total_timesteps=100_000,
-    buffer_size=50_000,
-    learning_starts=10_000,
+    total_timesteps=500_000,
+    buffer_size=24_000,
+    learning_starts=0,
     learning_rate=1e-4,
     batch_size=512,
     train_freq=(1, "episode"),
@@ -36,8 +34,9 @@ config = dict(
     policy_kwargs=dict(
                 activation_fn=nn.ReLU,
                 features_extractor_class=CustomCombinedExtractor,
-                features_extractor_kwargs=dict(cnn_output_dim=256),
-                net_arch=dict(pi=[128, 128], qf=[400, 300]),
+                features_extractor_kwargs=dict(cnn_output_dim=1024),
+                share_features_extractor=True,
+                net_arch=dict(pi=[1024, 1024], qf=[1024, 1024]),
                 normalize_images=False
             ),
     env_max_episode_steps=200,
@@ -75,8 +74,11 @@ model = TD3("MultiInputPolicy", env, verbose=1,
             policy_kwargs=config['policy_kwargs'])
 
 # Prefill replay buffer with demonstration dataset
+bc_replay_num = 0
 with h5py.File(f'dental_env/demos_augmented/traction_hdf5/tooth_3_top.hdf5', 'r') as f:
     for demo in f.keys():
+        if 'tooth_3_1.0' not in demo:
+            continue
         for i in range(len(f[demo]['acts'][:])):
             model.replay_buffer.add(
                 obs=dict(voxel=f[demo]['obs']['voxel'][i],
@@ -90,7 +92,11 @@ with h5py.File(f'dental_env/demos_augmented/traction_hdf5/tooth_3_top.hdf5', 'r'
                 done=f[demo]['info']['is_success'][i],
                 infos=[dict(placeholder=None)]
             )
+            bc_replay_num += 1
+            if bc_replay_num % 100 == 0:
+                print(f'current bc replay buffer filled: {bc_replay_num} / {config["buffer_size"]}')
 model.learn(total_timesteps=config["total_timesteps"],
+            log_interval=10,
             tb_log_name=f'first_run',
             reset_num_timesteps=True,
             progress_bar=True,

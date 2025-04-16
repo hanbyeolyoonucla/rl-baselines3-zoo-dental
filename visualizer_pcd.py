@@ -11,61 +11,54 @@ from hyperparams.python.ppo_config import hyperparams
 from gymnasium.wrappers import TransformReward
 from ibrl_td3.ibrl import IBRL
 from stable_baselines3 import TD3
+from ibrl_custom_td3 import CustomTD3
 import os
 from spatialmath import UnitQuaternion
 
 
 if __name__ == "__main__":
 
-    # tooth
-    policy_type = ['demo', 'random', 'IL'][0]
+    # select model
+    policy_type = ['demo', 'random', 'IL', 'TD3', 'IBRL'][4]
     model = ['coverage', 'traction', 'human'][1]
-    tooth_dir = f'dental_env/demos_augmented/{model}'
-    dirlist = os.listdir(tooth_dir)
-    fname = dirlist[np.random.randint(1, len(dirlist))]
-    tooth = fname[:-4]
-    # tooth = 'tooth_2_1.1_0_top_1_280_320_515'
-    # tooth = 'tooth_2_1.1_1_top_1_104_312_515'
-    # tooth = 'tooth_2_1.1_None_top_1_104_320_515'
-    # tooth = 'tooth_2_1.1_None_top_1_131_333_539'
-    # tooth = 'tooth_2_1.1_None_top_1_158_346_562'
-    # tooth = 'tooth_4_1.0_None_right_0_223_135_415'
-    # tooth = 'tooth_2_0.9_0_left_2_266_295_346'
-    # tooth = 'tooth_2_0.9_1_left_2_241_309_379'
-    # tooth = 'tooth_2_0.9_0_right_0_109_229_379'
-    # tooth = 'tooth_2_1.0_0_right_0_131_250_416'
-    # tooth = 'tooth_2_1.0_0_top_1_251_287_464'
-    # tooth = 'tooth_2_1.0_1_top_1_91_279_464'
-    # tooth = 'tooth_2_1.0_None_top_1_91_287_464'
-    # tooth = 'tooth_2_0.9_0_top_1_221_254_412'
-    # tooth = 'tooth_2_0.9_1_top_1_77_246_412'
-    # tooth = 'tooth_3_1.0_None_top_0_144_279_508'
+
+    # select tooth
+    # tooth_dir = f'dental_env/demos_augmented/{model}'
+    # dirlist = os.listdir(tooth_dir)
+    # fname = dirlist[np.random.randint(1, len(dirlist))]
+    # tooth = fname[:-4]
+    tooth='tooth_3_1.0_None_top_0_144_313_508'
 
     # Initialize gym environment
     env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=200, tooth=tooth)
     state, info = env.reset(seed=42)
 
-    demos = np.loadtxt(f'dental_env/demos_augmented/{model}/{tooth}.csv', delimiter=' ')
-    time_steps = len(demos)
-
-    if policy_type == "IL":
-        policy = CustomActorCriticPolicy(observation_space=env.observation_space,
-                                                action_space=env.action_space,
-                                                lr_schedule=get_schedule_fn(0.003))
-        policy = policy.load('models/bc_traction_policy_20')
+    if policy_type == "demo":
+        demos = np.loadtxt(f'dental_env/demos_augmented/{model}/{tooth}.csv', delimiter=' ')
+        time_steps = len(demos)
+    elif policy_type == "IL":
+        policy = CustomActorCriticPolicy.load(f'models/bc_traction_policy_20')
+    elif policy_type == "TD3":
+        policy = CustomTD3.load(f'models/dental_td3_ak9uohu2.zip')
+    elif policy_type == "IBRL":
+        policy = IBRL.load(f'models/ibrl_ezf2013i.zip', bc_replay_buffer_path=None)
 
     total_reward = 0
     total_collisions = 0
+    itr = 0
 
-    for itr in range(time_steps-1):
+    while True:
         if policy_type == "demo":
-            pos_action = demos[itr+1, :3] - demos[itr, :3]
-            quat_action = UnitQuaternion(demos[itr, 3:]).inv() * UnitQuaternion(demos[itr+1, 3:])
-            rpy_action = quat_action.rpy(unit='deg')
-            action = np.concatenate((pos_action, rpy_action))
-        elif policy_type == "IL":
+            if itr+1 < time_steps:
+                pos_action = demos[itr+1, :3] - demos[itr, :3]
+                quat_action = UnitQuaternion(demos[itr, 3:]).inv() * UnitQuaternion(demos[itr+1, 3:])
+                rpy_action = quat_action.rpy(unit='deg')
+                action = np.concatenate((pos_action, rpy_action))
+            else:
+                break
+        elif policy_type in ["IL", "TD3", "IBRL" ]:
             action, _ = policy.predict(state, deterministic=True)
-        else:
+        else:  # random
             action = env.action_space.sample()
         state, reward, terminated, truncated, info = env.step(action)
 
@@ -94,6 +87,8 @@ if __name__ == "__main__":
         rot = info['rotation']
         print(f'position: {pos}')
         print(f'rotation: {rot}')
+
+        itr += 1
 
         if terminated or truncated:
             env.close()

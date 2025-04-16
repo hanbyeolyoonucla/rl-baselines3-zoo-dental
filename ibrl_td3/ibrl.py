@@ -167,35 +167,36 @@ class IBRL(OffPolicyAlgorithm):
                 optimize_memory_usage=self.optimize_memory_usage,
                 **self.replay_buffer_kwargs,
             )
-        bc_replay_num = 0
-        for fname in os.listdir(self.bc_replay_buffer_path):
-            if bc_replay_num > self.bc_buffer_size:
-                break
-            if not fname.endswith('hdf5') or 'tooth_3' not in fname or 'left' in fname or 'right' in fname:
-                continue
-            print(f'bc_replay_buffer_path: {self.bc_replay_buffer_path}/{fname}')
-            with h5py.File(f'{self.bc_replay_buffer_path}/{fname}', 'r') as f:
-                for demo in f.keys():
-                    if bc_replay_num > self.bc_buffer_size:
-                        break
-                    if 'tooth_3_1.0' not in demo:
-                        continue
-                    for i in range(len(f[demo]['acts'][:])):
-                        self.bc_replay_buffer.add(
-                            obs=dict(voxel=f[demo]['obs']['voxel'][i],
-                                    burr_pos=f[demo]['obs']['burr_pos'][i],
-                                    burr_rot=f[demo]['obs']['burr_rot'][i]),
-                            next_obs=dict(voxel=f[demo]['obs']['voxel'][i+1],
-                                        burr_pos=f[demo]['obs']['burr_pos'][i+1],
-                                        burr_rot=f[demo]['obs']['burr_rot'][i+1]),
-                            action=f[demo]['acts'][i],
-                            reward=f[demo]['rews'][i],
-                            done=f[demo]['info']['is_success'][i],
-                            infos=[dict(placeholder=None)]
-                        )
-                        bc_replay_num += 1
-                        if bc_replay_num % 100 == 0:
-                            print(f'current bc replay buffer filled: {bc_replay_num} / {self.bc_buffer_size}')
+        if self.bc_replay_buffer_path is not None:
+            bc_replay_num = 0
+            for fname in os.listdir(self.bc_replay_buffer_path):
+                if bc_replay_num > self.bc_buffer_size:
+                    break
+                if not fname.endswith('hdf5') or 'tooth_3' not in fname or 'left' in fname or 'right' in fname:
+                    continue
+                print(f'bc_replay_buffer_path: {self.bc_replay_buffer_path}/{fname}')
+                with h5py.File(f'{self.bc_replay_buffer_path}/{fname}', 'r') as f:
+                    for demo in f.keys():
+                        if bc_replay_num > self.bc_buffer_size:
+                            break
+                        if 'tooth_3_1.0' not in demo:
+                            continue
+                        for i in range(len(f[demo]['acts'][:])):
+                            self.bc_replay_buffer.add(
+                                obs=dict(voxel=f[demo]['obs']['voxel'][i],
+                                        burr_pos=f[demo]['obs']['burr_pos'][i],
+                                        burr_rot=f[demo]['obs']['burr_rot'][i]),
+                                next_obs=dict(voxel=f[demo]['obs']['voxel'][i+1],
+                                            burr_pos=f[demo]['obs']['burr_pos'][i+1],
+                                            burr_rot=f[demo]['obs']['burr_rot'][i+1]),
+                                action=f[demo]['acts'][i],
+                                reward=f[demo]['rews'][i],
+                                done=f[demo]['info']['is_success'][i],
+                                infos=[dict(placeholder=None)]
+                            )
+                            bc_replay_num += 1
+                            if bc_replay_num % 100 == 0:
+                                print(f'current bc replay buffer filled: {bc_replay_num} / {self.bc_buffer_size}')
 
         self._create_aliases()
         # Running mean and running var

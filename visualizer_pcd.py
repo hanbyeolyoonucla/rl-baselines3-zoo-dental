@@ -18,8 +18,8 @@ from spatialmath import UnitQuaternion
 if __name__ == "__main__":
 
     # tooth
-    policy_type = ['demo', 'random', 'IL'][2]
-    model = ['coverage', 'traction', 'human'][0]
+    policy_type = ['demo', 'random', 'IL'][0]
+    model = ['coverage', 'traction', 'human'][1]
     tooth_dir = f'dental_env/demos_augmented/{model}'
     dirlist = os.listdir(tooth_dir)
     fname = dirlist[np.random.randint(1, len(dirlist))]
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # tooth = 'tooth_3_1.0_None_top_0_144_279_508'
 
     # Initialize gym environment
-    env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=200)
+    env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=200, tooth=tooth)
     state, info = env.reset(seed=42)
 
     demos = np.loadtxt(f'dental_env/demos_augmented/{model}/{tooth}.csv', delimiter=' ')
@@ -95,7 +95,7 @@ if __name__ == "__main__":
         print(f'position: {pos}')
         print(f'rotation: {rot}')
 
-        # if terminated or truncated:
-        #     env.close()
-        #     observation, info = env.reset()
+        if terminated or truncated:
+            env.close()
+            break
     env.close()

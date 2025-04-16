@@ -7,7 +7,9 @@ import numpy as np
 import h5py
 from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
-from stable_baselines3 import SAC, TD3
+from stable_baselines3.common.monitor import Monitor
+from ibrl_td3.custom_callback import CustomEvalCallback
+from ibrl_custom_td3 import CustomTD3
 from ibrl_td3 import IBRL
 import wandb
 from wandb.integration.sb3 import WandbCallback
@@ -19,7 +21,7 @@ import yaml
 
 # Define train configs
 config = dict(
-    total_timesteps=500_000,
+    total_timesteps=100_000,
     buffer_size=24_000,
     learning_starts=0,
     learning_rate=1e-4,
@@ -37,9 +39,14 @@ config = dict(
                 features_extractor_kwargs=dict(cnn_output_dim=1024),
                 share_features_extractor=True,
                 net_arch=dict(pi=[1024, 1024], qf=[1024, 1024]),
-                normalize_images=False
+                normalize_images=False,
+                bc_policy_path=f'models/bc_traction_policy_20',  # for use of pre-trained features extractor from bc policy
+                use_bc_features_extractor=True,
+                freeze_features_extractor=False,
             ),
+    bc_replay_buffer_path=f'dental_env/demos_augmented/traction_new_hdf5',  #  None for non-prefill replay buffer
     env_max_episode_steps=200,
+    stats_window_size=10,
 )
 
 # Initiate train logger (wandb)
@@ -48,7 +55,7 @@ run = wandb.init(
     config=config,
     sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
 )
-# wandb.tensorboard.patch(root_logdir=f"./runs/dental_td3_{run.id}/")
+
 # Save config pickle
 with open(f'models/configs/dental_td3_{run.id}.pkl', 'wb') as f:
     pickle.dump(config, f)
@@ -56,51 +63,37 @@ with open(f'models/configs/dental_td3_{run.id}.pkl', 'wb') as f:
 # Define environment
 env = gym.make("DentalEnvPCD-v0",
                render_mode=None,
-               max_episode_steps=config["env_max_episode_steps"],)
+               max_episode_steps=config["env_max_episode_steps"],
+               tooth='tooth_3_1.0_None_top_0_144_313_508')
+env = Monitor(env)
 
+# define callbacks
+eval_callback = CustomEvalCallback(eval_env=env, best_model_save_path='models/best_models',
+                                   log_path=None, eval_freq=10_000,
+                                   n_eval_episodes=10,
+                                   deterministic=True, render=False)
 # Define train model
-model = TD3("MultiInputPolicy", env, verbose=1,
-            learning_rate=config["learning_rate"],
-            buffer_size=config["buffer_size"],
-            learning_starts=config["learning_starts"],
-            batch_size=config["batch_size"],
-            train_freq=config["train_freq"],  # train every 100 rollout
-            tau=config["tau"],
-            policy_delay=config["policy_delay"],
-            target_policy_noise=config["target_policy_noise"],
-            target_noise_clip=config["target_policy_clip"],
-            tensorboard_log=f"runs/dental_td3_{run.id}",
-            action_noise=NormalActionNoise(config["action_noise_mu"]*np.ones(6), config["action_noise_std"]*np.ones(6)),
-            policy_kwargs=config['policy_kwargs'])
-
-# Prefill replay buffer with demonstration dataset
-bc_replay_num = 0
-with h5py.File(f'dental_env/demos_augmented/traction_hdf5/tooth_3_top.hdf5', 'r') as f:
-    for demo in f.keys():
-        if 'tooth_3_1.0' not in demo:
-            continue
-        for i in range(len(f[demo]['acts'][:])):
-            model.replay_buffer.add(
-                obs=dict(voxel=f[demo]['obs']['voxel'][i],
-                         burr_pos=f[demo]['obs']['burr_pos'][i],
-                         burr_rot=f[demo]['obs']['burr_rot'][i]),
-                next_obs=dict(voxel=f[demo]['obs']['voxel'][i + 1],
-                              burr_pos=f[demo]['obs']['burr_pos'][i + 1],
-                              burr_rot=f[demo]['obs']['burr_rot'][i + 1]),
-                action=f[demo]['acts'][i],
-                reward=f[demo]['rews'][i],
-                done=f[demo]['info']['is_success'][i],
-                infos=[dict(placeholder=None)]
-            )
-            bc_replay_num += 1
-            if bc_replay_num % 100 == 0:
-                print(f'current bc replay buffer filled: {bc_replay_num} / {config["buffer_size"]}')
+model = CustomTD3("MultiInputPolicy", env, verbose=1,
+                  learning_rate=config["learning_rate"],
+                  buffer_size=config["buffer_size"],
+                  learning_starts=config["learning_starts"],
+                  batch_size=config["batch_size"],
+                  train_freq=config["train_freq"],  # train every 100 rollout
+                  tau=config["tau"],
+                  policy_delay=config["policy_delay"],
+                  target_policy_noise=config["target_policy_noise"],
+                  target_noise_clip=config["target_policy_clip"],
+                  tensorboard_log=f"runs/dental_td3_{run.id}",
+                  action_noise=NormalActionNoise(config["action_noise_mu"]*np.ones(6), config["action_noise_std"]*np.ones(6)),
+                  policy_kwargs=config['policy_kwargs'],
+                  bc_replay_buffer_path=config['bc_replay_buffer_path'],
+                  stats_window_size=config['stats_window_size'],)
 model.learn(total_timesteps=config["total_timesteps"],
-            log_interval=10,
+            log_interval=config['stats_window_size'],
             tb_log_name=f'first_run',
             reset_num_timesteps=True,
             progress_bar=True,
-            callback=WandbCallback(verbose=2))
+            callback=eval_callback)
 
 # Save train results and replay buffer for continuing training
 model.save(f'models/dental_td3_{run.id}')

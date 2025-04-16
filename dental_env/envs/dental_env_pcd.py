@@ -254,10 +254,14 @@ class DentalEnvPCD(gym.Env):
         reward_decay_removal = np.sum(removal_caries)
         reward_enamel_removal = np.sum(removal_enamel)
         reward_dentin_removal = np.sum(removal_dentin)
-        reward = (1000*reward_decay_removal
-                  - 10*reward_enamel_removal
-                  - 100*reward_dentin_removal
-                  - 100*self._collision)*0.001
+        # reward = (1000*reward_decay_removal
+        #           - 10*reward_enamel_removal
+        #           - 100*reward_dentin_removal
+        #           - 100*self._collision)*0.001
+        reward = (10*reward_decay_removal/self._init_num_decay
+                  - 2*reward_enamel_removal/self._init_num_enamel
+                  - 3*reward_dentin_removal/self._init_num_dentin
+                  - 5*self._collision)
         # reward = 1000*reward_decay_removal - 1*reward_enamel_removal - 1*reward_dentin_removal\
         #          - 1*self._collision
         # reward = reward_decay_removal

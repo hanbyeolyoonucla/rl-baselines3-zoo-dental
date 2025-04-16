@@ -12,33 +12,33 @@ import yaml
 import os
 from spatialmath import UnitQuaternion
 
-tnums = [2, 3, 4]
-cut_types = ['left', 'right']
-models = ['traction', 'coverage']
+tnums = [3]
+cut_types = ['top']
+models = ['traction']
 
 for tnum in tnums:
     for cut_type in cut_types:
         for model in models:
-            data = f'tooth_{tnum}_{cut_type}'
+            data = f'tooth_{tnum}_{cut_type}_1.0'
             tooth_dir = f'dental_env/demos_augmented/{model}'
             print(f'{model}: {data}')
 
-            with h5py.File(f'dental_env/demos_augmented/{model}_hdf5/{data}.hdf5', 'w') as f:
-                with open(f'dental_env/demos_augmented/{model}_hdf5/{data}.yml', 'w') as s:
+            with h5py.File(f'dental_env/demos_augmented/{model}_new_hdf5/{data}.hdf5', 'w') as f:
+                with open(f'dental_env/demos_augmented/{model}_new_hdf5/{data}.yml', 'w') as s:
 
                     tooth_stat = {}
                     dirlist = os.listdir(tooth_dir)
                     for fname in tqdm(dirlist):
 
-                        # remove .npy from file name
+                        # remove .csv from file name
                         tooth = fname[:-4]
 
                         # only consider tnum and cut type defined
-                        if not (f'tooth_{tnum}' in tooth and f'{cut_type}' in tooth):
+                        if not (f'tooth_{tnum}_1.0' in tooth and f'{cut_type}' in tooth):
                             continue
 
                         # initialize environment
-                        env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=1000, tooth=tooth)
+                        env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=500, tooth=tooth)
                         obs, info = env.reset(seed=42)
                         voxel_size = obs['voxel'].shape
 

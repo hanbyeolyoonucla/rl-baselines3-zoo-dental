@@ -13,11 +13,11 @@ from stable_baselines3.common.off_policy_algorithm import OffPolicyAlgorithm
 from stable_baselines3.common.policies import BasePolicy, ContinuousCritic
 from stable_baselines3.common.type_aliases import GymEnv, MaybeCallback, Schedule, DictReplayBufferSamples
 from stable_baselines3.common.utils import get_parameters_by_name, polyak_update
-from ibrl_td3.policies import Actor, Critic, MlpPolicy, CnnPolicy, MultiInputPolicy, IBRLPolicy
+from ibrl_custom_td3.policies import Actor, Critic, MlpPolicy, CnnPolicy, MultiInputPolicy, CustomTD3Policy
 
-SelfIBRL = TypeVar("SelfIBRL", bound="IBRL")
+SelfCustomTD3 = TypeVar("SelfCustomTD3", bound="CustomTD3")
 
-class IBRL(OffPolicyAlgorithm):
+class CustomTD3(OffPolicyAlgorithm):
     """
     Imitation Bootstrapped Reinforcement Learning (IBRL)
     This implementation borrows code from original implementation (https://github.com/hengyuan-hu/ibrl)
@@ -75,7 +75,7 @@ class IBRL(OffPolicyAlgorithm):
         "CnnPolicy": CnnPolicy,
         "MultiInputPolicy": MultiInputPolicy,
     }
-    policy: IBRLPolicy
+    policy: CustomTD3Policy
     actor: Actor
     actor_target: Actor
     critic: Critic
@@ -83,24 +83,20 @@ class IBRL(OffPolicyAlgorithm):
 
     def __init__(
             self,
-            policy: Union[str, type[IBRLPolicy]],
+            policy: Union[str, type[CustomTD3Policy]],
             env: Union[GymEnv, str],
             learning_rate: Union[float, Schedule] = 1e-3,
             buffer_size: int = 1_000_000,  # 1e6
-            bc_buffer_size: int = 10_000,
             learning_starts: int = 100,
             batch_size: int = 256,
-            rl_bc_batch_ratio: float = 1,  # 1 purely rl batch
             tau: float = 0.005,
             gamma: float = 0.99,
             train_freq: Union[int, tuple[int, str]] = 1,
-            model_save_freq: int = 10_000,
-            model_save_path: str = f'models/',
             gradient_steps: int = 1,
             action_noise: Optional[ActionNoise] = None,  # NormalActionNoise(0*np.ones(6), 0.2*np.ones(6)),
             replay_buffer_class: Optional[type[ReplayBuffer]] = None,
             replay_buffer_kwargs: Optional[dict[str, Any]] = None,
-            bc_replay_buffer_path: str = 'dental_env/demos_augmented/traction_new_hdf5',
+            bc_replay_buffer_path: str = None,
             optimize_memory_usage: bool = False,
             policy_delay: int = 2,
             target_policy_noise: float = 0.2,
@@ -144,13 +140,7 @@ class IBRL(OffPolicyAlgorithm):
         self.target_policy_noise = target_policy_noise
 
         # behavior cloning demonstration dataset buffer
-        self.rl_bc_batch_ratio = rl_bc_batch_ratio
-        self.bc_buffer_size = bc_buffer_size
         self.bc_replay_buffer_path = bc_replay_buffer_path
-
-        # model save freq
-        self.model_save_freq = model_save_freq
-        self.model_save_path = model_save_path
 
         if _init_setup_model:
             self._setup_model()
@@ -158,44 +148,36 @@ class IBRL(OffPolicyAlgorithm):
     def _setup_model(self) -> None:
         super()._setup_model()
 
-        self.bc_replay_buffer = DictReplayBuffer(
-                self.bc_buffer_size,
-                self.observation_space,
-                self.action_space,
-                device=self.device,
-                n_envs=self.n_envs,
-                optimize_memory_usage=self.optimize_memory_usage,
-                **self.replay_buffer_kwargs,
-            )
-        bc_replay_num = 0
-        for fname in os.listdir(self.bc_replay_buffer_path):
-            if bc_replay_num > self.bc_buffer_size:
-                break
-            if not fname.endswith('hdf5') or 'tooth_3' not in fname or 'left' in fname or 'right' in fname:
-                continue
-            print(f'bc_replay_buffer_path: {self.bc_replay_buffer_path}/{fname}')
-            with h5py.File(f'{self.bc_replay_buffer_path}/{fname}', 'r') as f:
-                for demo in f.keys():
-                    if bc_replay_num > self.bc_buffer_size:
-                        break
-                    if 'tooth_3_1.0' not in demo:
-                        continue
-                    for i in range(len(f[demo]['acts'][:])):
-                        self.bc_replay_buffer.add(
-                            obs=dict(voxel=f[demo]['obs']['voxel'][i],
-                                    burr_pos=f[demo]['obs']['burr_pos'][i],
-                                    burr_rot=f[demo]['obs']['burr_rot'][i]),
-                            next_obs=dict(voxel=f[demo]['obs']['voxel'][i+1],
-                                        burr_pos=f[demo]['obs']['burr_pos'][i+1],
-                                        burr_rot=f[demo]['obs']['burr_rot'][i+1]),
-                            action=f[demo]['acts'][i],
-                            reward=f[demo]['rews'][i],
-                            done=f[demo]['info']['is_success'][i],
-                            infos=[dict(placeholder=None)]
-                        )
-                        bc_replay_num += 1
-                        if bc_replay_num % 100 == 0:
-                            print(f'current bc replay buffer filled: {bc_replay_num} / {self.bc_buffer_size}')
+        if self.bc_replay_buffer_path is not None:
+            bc_replay_num = 0
+            for fname in os.listdir(self.bc_replay_buffer_path):
+                if bc_replay_num > self.buffer_size:
+                    break
+                if not fname.endswith('hdf5') or 'tooth_3' not in fname or 'left' in fname or 'right' in fname:
+                    continue
+                print(f'bc_replay_buffer_path: {self.bc_replay_buffer_path}/{fname}')
+                with h5py.File(f'{self.bc_replay_buffer_path}/{fname}', 'r') as f:
+                    for demo in f.keys():
+                        if bc_replay_num > self.buffer_size:
+                            break
+                        if 'tooth_3_1.0_None_top' not in demo:
+                            continue
+                        for i in range(len(f[demo]['acts'][:])):
+                            self.replay_buffer.add(
+                                obs=dict(voxel=f[demo]['obs']['voxel'][i],
+                                        burr_pos=f[demo]['obs']['burr_pos'][i],
+                                        burr_rot=f[demo]['obs']['burr_rot'][i]),
+                                next_obs=dict(voxel=f[demo]['obs']['voxel'][i+1],
+                                            burr_pos=f[demo]['obs']['burr_pos'][i+1],
+                                            burr_rot=f[demo]['obs']['burr_rot'][i+1]),
+                                action=f[demo]['acts'][i],
+                                reward=f[demo]['rews'][i],
+                                done=f[demo]['info']['is_success'][i],
+                                infos=[dict(placeholder=None)]
+                            )
+                            bc_replay_num += 1
+                            if bc_replay_num % 100 == 0:
+                                print(f'current replay buffer pre-filled: {bc_replay_num} / {self.buffer_size}')
 
         self._create_aliases()
         # Running mean and running var
@@ -210,29 +192,6 @@ class IBRL(OffPolicyAlgorithm):
         self.critic = self.policy.critic
         self.critic_target = self.policy.critic_target
 
-    def predict(
-        self,
-        observation: Union[np.ndarray, dict[str, np.ndarray]],
-        state: Optional[tuple[np.ndarray, ...]] = None,
-        episode_start: Optional[np.ndarray] = None,
-        deterministic: bool = False,
-        use_actor_proposal: bool = False,
-    ) -> tuple[np.ndarray, Optional[tuple[np.ndarray, ...]]]:
-        """
-        Get the policy action from an observation (and optional hidden state).
-        Includes sugar-coating to handle different observations (e.g. normalizing images).
-
-        :param observation: the input observation
-        :param state: The last hidden states (can be None, used in recurrent policies)
-        :param episode_start: The last masks (can be None, used in recurrent policies)
-            this correspond to beginning of episodes,
-            where the hidden states of the RNN must be reset.
-        :param deterministic: Whether or not to return deterministic actions.
-        :return: the model's action and the next hidden state
-            (used in recurrent policies)
-        """
-        return self.policy.predict(observation, state, episode_start, deterministic, use_actor_proposal)
-
     def train(self, gradient_steps: int, batch_size: int = 100) -> None:
         # Switch to train mode (this affects batch norm / dropout)
         self.policy.set_training_mode(True)
@@ -244,48 +203,20 @@ class IBRL(OffPolicyAlgorithm):
         for _ in range(gradient_steps):
             self._n_updates += 1
             # Sample replay buffer
-            rl_batch_size = int(self.rl_bc_batch_ratio * batch_size)
-            bc_batch_size = batch_size - rl_batch_size
-            rl_replay_data = self.replay_buffer.sample(rl_batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
-            # TODO: update replay_data so that it includes bc data
-            bc_replay_data = self.bc_replay_buffer.sample(bc_batch_size, env=self._vec_normalize_env)
-            replay_data = DictReplayBufferSamples(
-                observations={key: th.cat([rl_replay_data.observations[key], bc_replay_data.observations[key]], dim=0) for key in rl_replay_data.observations.keys()},
-                actions=th.cat([rl_replay_data.actions, bc_replay_data.actions], dim=0),
-                next_observations={key: th.cat([rl_replay_data.next_observations[key], bc_replay_data.next_observations[key]], dim=0) for key in rl_replay_data.next_observations.keys()},
-                # Only use dones that are not due to timeouts
-                # deactivated by default (timeouts is initialized as an array of False)
-                dones=th.cat([rl_replay_data.dones, bc_replay_data.dones], dim=0),
-                rewards=th.cat([rl_replay_data.rewards, bc_replay_data.rewards], dim=0),
-            )
+            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)  # type: ignore[union-attr]
 
             with th.no_grad():
-                # Select action according to policy
-                # TODO: select action according to IBRL policy
                 # Select action according to policy and add clipped noise
                 noise = replay_data.actions.clone().data.normal_(0, self.target_policy_noise)
                 noise = noise.clamp(-self.target_noise_clip, self.target_noise_clip)
-                rl_next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
-                # rl_next_actions = self.actor_target(replay_data.next_observations)  # without noise
-                bc_next_actions, _, _ = self.policy.bc_policy.forward(replay_data.next_observations, deterministic=True)
-                rl_bc_next_actions = th.stack([rl_next_actions, bc_next_actions], dim=1)
-                bsize, num_actions, _ = rl_bc_next_actions.size()
+                next_actions = (self.actor_target(replay_data.next_observations) + noise).clamp(-1, 1)
 
-                # Compute the next Q values: min over all critics targets
-                rl_next_q_values = th.cat(self.critic_target(replay_data.next_observations, rl_next_actions), dim=1)
-                rl_next_q_values, _ = th.min(rl_next_q_values, dim=1, keepdim=True)
-                bc_next_q_values = th.cat(self.critic_target(replay_data.next_observations, bc_next_actions), dim=1)
-                bc_next_q_values, _ = th.min(bc_next_q_values, dim=1, keepdim=True)
-                rl_bc_next_q_values = th.cat((rl_next_q_values, bc_next_q_values), dim=1)
-
-                # TODO: epsilon greedy action
-                greedy_action_idx = rl_bc_next_q_values.argmax(dim=1)
-                greedy_action = rl_bc_next_actions[range(bsize), greedy_action_idx]
-                next_q_values = rl_bc_next_q_values[range(bsize), greedy_action_idx].view(-1, 1)
+                # Compute the next Q-values: min over all critics targets
+                next_q_values = th.cat(self.critic_target(replay_data.next_observations, next_actions), dim=1)
+                next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
 
             # Get current Q-values estimates for each critic network
-            # using action from the replay buffer
             current_q_values = self.critic(replay_data.observations, replay_data.actions)
 
             # Compute critic loss
@@ -293,21 +224,15 @@ class IBRL(OffPolicyAlgorithm):
             assert isinstance(critic_loss, th.Tensor)
             critic_losses.append(critic_loss.item())
 
-            # Optimize the critic
+            # Optimize the critics
             self.critic.optimizer.zero_grad()
             critic_loss.backward()
             self.critic.optimizer.step()
 
             # Delayed policy updates
             if self._n_updates % self.policy_delay == 0:
-                # Compute actor loss using q1
-                actor_loss = -self.critic.q1_forward(replay_data.observations,
-                                                     self.actor(replay_data.observations)).mean()
-                # Compute actor loss using minimum q
-                # actor_q_values = th.cat(self.critic.forward(replay_data.observations,
-                #                                             self.actor(replay_data.observations)), dim=1)
-                # rl_next_q_values, _ = th.min(actor_q_values, dim=1, keepdim=True)
-                # actor_loss = -rl_next_q_values.mean()
+                # Compute actor loss
+                actor_loss = -self.critic.q1_forward(replay_data.observations, self.actor(replay_data.observations)).mean()
                 actor_losses.append(actor_loss.item())
 
                 # Optimize the actor
@@ -320,22 +245,21 @@ class IBRL(OffPolicyAlgorithm):
                 # Copy running stats, see GH issue #996
                 polyak_update(self.critic_batch_norm_stats, self.critic_batch_norm_stats_target, 1.0)
                 polyak_update(self.actor_batch_norm_stats, self.actor_batch_norm_stats_target, 1.0)
-            if self._n_updates % self.model_save_freq == 0:
-                self.save(self.model_save_path+f'_{self._n_updates}')
+
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         if len(actor_losses) > 0:
             self.logger.record("train/actor_loss", np.mean(actor_losses))
         self.logger.record("train/critic_loss", np.mean(critic_losses))
 
     def learn(
-            self: SelfIBRL,
+            self: SelfCustomTD3,
             total_timesteps: int,
             callback: MaybeCallback = None,
             log_interval: int = 4,
-            tb_log_name: str = "IBRL",
+            tb_log_name: str = "TD3",
             reset_num_timesteps: bool = True,
             progress_bar: bool = False,
-    ) -> SelfIBRL:
+    ) -> SelfCustomTD3:
         return super().learn(
             total_timesteps=total_timesteps,
             callback=callback,
@@ -351,52 +275,3 @@ class IBRL(OffPolicyAlgorithm):
     def _get_torch_save_params(self) -> tuple[list[str], list[str]]:
         state_dicts = ["policy", "actor.optimizer", "critic.optimizer"]
         return state_dicts, []
-    
-    def _sample_action(
-        self,
-        learning_starts: int,
-        action_noise: Optional[ActionNoise] = None,
-        n_envs: int = 1,
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Sample an action according to the exploration policy.
-        This is either done by sampling the probability distribution of the policy,
-        or sampling a random action (from a uniform distribution over the action space)
-        or by adding noise to the deterministic output.
-
-        :param action_noise: Action noise that will be used for exploration
-            Required for deterministic policy (e.g. TD3). This can also be used
-            in addition to the stochastic policy for SAC.
-        :param learning_starts: Number of steps before learning for the warm-up phase.
-        :param n_envs:
-        :return: action to take in the environment
-            and scaled action that will be stored in the replay buffer.
-            The two differs when the action space is not normalized (bounds are not [-1, 1]).
-        """
-        # Select action randomly or according to policy
-        if self.num_timesteps < learning_starts and not (self.use_sde and self.use_sde_at_warmup):
-            # Warmup phase
-            unscaled_action = np.array([self.action_space.sample() for _ in range(n_envs)])
-        else:
-            # Note: when using continuous actions,
-            # we assume that the policy uses tanh to scale the action
-            # We use non-deterministic action in the case of SAC, for TD3, it does not matter
-            assert self._last_obs is not None, "self._last_obs was not set"
-            unscaled_action, _ = self.predict(self._last_obs, deterministic=False, use_actor_proposal=True)
-
-        # Rescale the action from [low, high] to [-1, 1]
-        if isinstance(self.action_space, spaces.Box):
-            scaled_action = self.policy.scale_action(unscaled_action)
-
-            # Add noise to the action (improve exploration)
-            if action_noise is not None:
-                scaled_action = np.clip(scaled_action + action_noise(), -1, 1)
-
-            # We store the scaled action in the buffer
-            buffer_action = scaled_action
-            action = self.policy.unscale_action(scaled_action)
-        else:
-            # Discrete case, no need to normalize or clip
-            buffer_action = unscaled_action
-            action = buffer_action
-        return action, buffer_action

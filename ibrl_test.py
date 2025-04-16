@@ -7,6 +7,9 @@ import numpy as np
 import h5py
 from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
+from stable_baselines3.common.callbacks import CallbackList, CheckpointCallback, EvalCallback
+from stable_baselines3.common.monitor import Monitor
+from ibrl_td3.custom_callback import CustomEvalCallback
 from stable_baselines3 import SAC
 from ibrl_td3 import IBRL
 import wandb
@@ -17,7 +20,7 @@ import pickle
 
 # Define train configs
 config = dict(
-    total_timesteps=500_000,
+    total_timesteps=100_000,
     buffer_size=12_000,
     bc_buffer_size=12_000,
     learning_starts=0,
@@ -35,9 +38,14 @@ config = dict(
                 features_extractor_kwargs=dict(cnn_output_dim=1024),
                 share_features_extractor=True,
                 net_arch=dict(pi=[1024, 1024], qf=[1024, 1024]),
-                normalize_images=False
+                normalize_images=False,
+                bc_policy_path=f'models/bc_traction_policy_20',
+                use_bc_features_extractor=True,
+                freeze_features_extractor=False,
             ),
+    bc_replay_buffer_path=f'dental_env/demos_augmented/traction_new_hdf5',
     env_max_episode_steps=200,
+    stats_window_size=10,
 )
 
 # Initiate train logger (wandb)
@@ -55,9 +63,18 @@ with open(f'models/configs/ibrl_{run.id}_v1.pkl', 'wb') as f:
 env = gym.make("DentalEnvPCD-v0",
                render_mode=None,
                max_episode_steps=config["env_max_episode_steps"],
-               )  #tooth='tooth_3_1.0_None_top_0_144_313_508'
+               tooth='tooth_3_1.0_None_top_0_144_313_508')  #tooth='tooth_3_1.0_None_top_0_144_313_508'
+env = Monitor(env)
+
+# define callbacks
+eval_callback = CustomEvalCallback(env, best_model_save_path='models/ibrl_one_tooth',
+                                   log_path=None, eval_freq=10_000,
+                                   n_eval_episodes=10,
+                                   deterministic=True, render=False)
 
 # Define train model
+# model = IBRL.load(f'models/ibrl_ezf2013i.zip', env)
+# model.load_replay_buffer(f'models/replay_buffer/ibrl_ezf2013i.pkl')
 model = IBRL("MultiInputPolicy", env, verbose=1,
              learning_rate=config["learning_rate"],
              buffer_size=config["buffer_size"],
@@ -72,14 +89,16 @@ model = IBRL("MultiInputPolicy", env, verbose=1,
              target_noise_clip=config["target_policy_clip"],
              model_save_freq=config['total_timesteps']//5,  # don't save
              model_save_path=f'models/ibrl_{run.id}',
-             bc_replay_buffer_path=f'dental_env/demos_augmented/traction_hdf5',
+             bc_replay_buffer_path=config['bc_replay_buffer_path'],
              tensorboard_log=f"runs/ibrl_{run.id}",
-             policy_kwargs=config['policy_kwargs'])
+             policy_kwargs=config['policy_kwargs'],
+             stats_window_size=config['stats_window_size'],)
 model.learn(total_timesteps=config["total_timesteps"],
-            log_interval=10,  # log every 10 episodes (1step in wandb = 10 episodes)
+            log_interval=config['stats_window_size'],  # log every 10 episodes (1step in wandb = 10 episodes)
             tb_log_name=f'first_run',
             reset_num_timesteps=True,
             progress_bar=True,
+            callback=eval_callback,
             )
 
 # Save train results and replay buffer for continuing training

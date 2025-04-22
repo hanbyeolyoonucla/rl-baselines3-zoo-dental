@@ -41,7 +41,9 @@ if __name__ == "__main__":
     elif policy_type == "TD3":
         policy = CustomTD3.load(f'models/dental_td3_ak9uohu2.zip')
     elif policy_type == "IBRL":
-        policy = IBRL.load(f'models/ibrl_ezf2013i.zip', bc_replay_buffer_path=None)
+        # policy = IBRL.load(f'models/ibrl_ezf2013i.zip', bc_replay_buffer_path=None)
+        # policy = IBRL.load(f'models/ibrl_sgvy41b4.zip', bc_replay_buffer_path=None)
+        policy = IBRL.load(f'models/best_best/best_model.zip', bc_replay_buffer_path=None)
 
     total_reward = 0
     total_collisions = 0

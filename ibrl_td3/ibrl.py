@@ -271,6 +271,8 @@ class IBRL(OffPolicyAlgorithm):
                 bc_next_actions, _, _ = self.policy.bc_policy.forward(replay_data.next_observations, deterministic=True)
                 rl_bc_next_actions = th.stack([rl_next_actions, bc_next_actions], dim=1)
                 bsize, num_actions, _ = rl_bc_next_actions.size()
+                print(f'bc action mean (batch): {th.mean(bc_next_actions, 0)}')
+                print(f'actor action mean (batch): {th.mean(rl_next_actions, 0)}')
 
                 # Compute the next Q values: min over all critics targets
                 rl_next_q_values = th.cat(self.critic_target(replay_data.next_observations, rl_next_actions), dim=1)
@@ -284,6 +286,10 @@ class IBRL(OffPolicyAlgorithm):
                 greedy_action = rl_bc_next_actions[range(bsize), greedy_action_idx]
                 next_q_values = rl_bc_next_q_values[range(bsize), greedy_action_idx].view(-1, 1)
                 target_q_values = replay_data.rewards + (1 - replay_data.dones) * self.gamma * next_q_values
+                self.logger.record("train/bootstrapped_bc_action_ratio", th.mean(greedy_action_idx.float()).item())
+                self.logger.record("train/bootstrapped_next_q_values_mean", th.mean(next_q_values.float()).item())
+                print(f'bootstrapped_bc_action_ratio: {th.mean(greedy_action_idx.float()):.2%}')
+                print(f'bootstrapped_next_q_values_mean: {th.mean(next_q_values.float())}')
 
             # Get current Q-values estimates for each critic network
             # using action from the replay buffer
@@ -302,14 +308,15 @@ class IBRL(OffPolicyAlgorithm):
             # Delayed policy updates
             if self._n_updates % self.policy_delay == 0:
                 # Compute actor loss using q1
-                actor_loss = -self.critic.q1_forward(replay_data.observations,
-                                                     self.actor(replay_data.observations)).mean()
+                # actor_loss = -self.critic.q1_forward(replay_data.observations,
+                #                                      self.actor(replay_data.observations)).mean()
                 # Compute actor loss using minimum q
-                # actor_q_values = th.cat(self.critic.forward(replay_data.observations,
-                #                                             self.actor(replay_data.observations)), dim=1)
-                # rl_next_q_values, _ = th.min(actor_q_values, dim=1, keepdim=True)
-                # actor_loss = -rl_next_q_values.mean()
+                actor_q_values = th.cat(self.critic.forward(replay_data.observations,
+                                                            self.actor(replay_data.observations)), dim=1)
+                rl_next_q_values, _ = th.min(actor_q_values, dim=1, keepdim=True)
+                actor_loss = -rl_next_q_values.mean()
                 actor_losses.append(actor_loss.item())
+                print(f'mean actor q values q1 and q2: {th.mean(actor_q_values, 0)}')
 
                 # Optimize the actor
                 self.actor.optimizer.zero_grad()
@@ -347,7 +354,7 @@ class IBRL(OffPolicyAlgorithm):
         )
 
     def _excluded_save_params(self) -> list[str]:
-        return super()._excluded_save_params() + ["actor", "critic", "actor_target", "critic_target"]  # noqa: RUF005
+        return super()._excluded_save_params() + ["actor", "critic", "actor_target", "critic_target", "bc_replay_buffer"]  # noqa: RUF005
 
     def _get_torch_save_params(self) -> tuple[list[str], list[str]]:
         state_dicts = ["policy", "actor.optimizer", "critic.optimizer"]

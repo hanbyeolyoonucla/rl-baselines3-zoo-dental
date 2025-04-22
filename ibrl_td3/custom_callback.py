@@ -155,6 +155,7 @@ class CustomEvalCallback(EvalCallback):
                 mean_cre, std_cre = np.mean(self._cre_buffer), np.std(self._cre_buffer)
                 if self.verbose >= 1:
                     print(f"CRE: {mean_cre:.2f} +/- {std_cre:.2f}%")
+                    print(self._cre_buffer)
                 self.logger.record("eval/mean_cre", mean_cre)
                 self.logger.record("eval/std_cre", std_cre)
 
@@ -162,6 +163,7 @@ class CustomEvalCallback(EvalCallback):
                 mean_mip, std_mip = np.mean(self._mip_buffer), np.std(self._mip_buffer)
                 if self.verbose >= 1:
                     print(f"MIP: {mean_mip:.2f} +/- {std_cre:.2f}%")
+                    print(self._mip_buffer)
                 self.logger.record("eval/mean_mip", mean_mip)
                 self.logger.record("eval/std_mip", std_mip)
 

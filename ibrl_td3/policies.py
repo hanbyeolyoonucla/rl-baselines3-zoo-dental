@@ -64,6 +64,7 @@ class Actor(BasePolicy):
         # actor_net = create_mlp(features_dim, action_dim, net_arch, activation_fn, squash_output=True)
         if len(net_arch) > 0:
             actor_net = [nn.Linear(features_dim, net_arch[0], bias=True),
+                         nn.LayerNorm(net_arch[0]),
                          nn.Dropout(p=0.5, inplace=False),
                          activation_fn(),]
         else:
@@ -71,6 +72,7 @@ class Actor(BasePolicy):
 
         for idx in range(len(net_arch) - 1):
             actor_net.append(nn.Linear(net_arch[idx], net_arch[idx + 1], bias=True))
+            actor_net.append(nn.LayerNorm(net_arch[idx+1]))
             actor_net.append(nn.Dropout(p=0.5, inplace=False))  # IBRL dropout
             actor_net.append(activation_fn())
 
@@ -98,9 +100,10 @@ class Actor(BasePolicy):
         # assert deterministic, 'The TD3 actor only outputs deterministic actions'
         # Learn the features extractor using the policy loss only --> HBY: using the critic loss only
         # when the features_extractor is shared with the actor
-        with th.set_grad_enabled(not self.share_features_extractor):
-            features = self.extract_features(obs, self.features_extractor)
-        return self.mu(features)
+        # with th.set_grad_enabled(not self.share_features_extractor):
+        features = self.extract_features(obs, self.features_extractor)
+        # print(f'features for actor mean: {th.mean(features)} +/- {th.std(features)}')
+        return self.mu(features) * 0.1  # to scale it so that it matches with bc action scale
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
         # Note: the deterministic deterministic parameter is ignored in the case of TD3.
@@ -186,8 +189,10 @@ class Critic(BaseModel):
             self.q_networks.append(q_net)
 
     def forward(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, ...]:
-        features = self.extract_features(obs, self.features_extractor)  # update feature extractor based on critic loss
+        with th.set_grad_enabled(not self.share_features_extractor):
+            features = self.extract_features(obs, self.features_extractor)  # update feature extractor based on critic loss
         qvalue_input = th.cat([features, actions], dim=1)
+        # print(f'features for critic mean: {th.mean(features)} +/- {th.std(features)}')
         return tuple(q_net(qvalue_input) for q_net in self.q_networks)
 
     def q1_forward(self, obs: th.Tensor, actions: th.Tensor) -> th.Tensor:
@@ -422,10 +427,12 @@ class IBRLPolicy(BasePolicy):
             if use_actor_proposal:
                 # actions = self.actor_target(obs_tensor)
                 bc_actions, _, _ = self.bc_policy.forward(obs_tensor, deterministic=deterministic)
-                rl_noises = bc_actions.clone().data.normal_(0, 0.1)
+                rl_noises = bc_actions.clone().data.normal_(0, 0.1)  # rollout noise
                 rl_actions = (self.actor.forward(obs_tensor) + rl_noises).clamp(-1, 1)
                 rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
                 bsize, num_actions, _ = rl_bc_actions.size()
+                # print(f'bc action (rollout): {bc_actions}')
+                # print(f'actor action (rollout): {rl_actions}')
 
                 rl_q_values = th.cat(self.critic_target(obs_tensor, rl_actions), dim=1)
                 rl_q_values, _ = th.min(rl_q_values, dim=1, keepdim=True)
@@ -434,8 +441,11 @@ class IBRLPolicy(BasePolicy):
                 rl_bc_q_values = th.cat((rl_q_values, bc_q_values), dim=1)
                 greedy_action_idx = rl_bc_q_values.argmax(dim=1)
                 actions = rl_bc_actions[range(bsize), greedy_action_idx]
+                # print(f'proposal greedy_action_idx shape: {greedy_action_idx.shape}')
+                # print(f'proposal bc action ratio: {th.mean(greedy_action_idx.float()):.2%}')
             else:
                 actions = self._predict(obs_tensor, deterministic=deterministic)
+                print(f'Actor target predicted action: {actions}')
         # Convert to numpy, and reshape to the original action shape
         actions = actions.cpu().numpy().reshape((-1, *self.action_space.shape))  # type: ignore[misc, assignment]
 

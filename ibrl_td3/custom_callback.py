@@ -157,7 +157,7 @@ class CustomEvalCallback(EvalCallback):
                     print(f"CRE: {mean_cre:.2f} +/- {std_cre:.2f}%")
                     print(self._cre_buffer)
                 self.logger.record("eval/mean_cre", mean_cre)
-                self.logger.record("eval/std_cre", std_cre)
+                # self.logger.record("eval/std_cre", std_cre)
 
             if len(self._mip_buffer) > 0:
                 mean_mip, std_mip = np.mean(self._mip_buffer), np.std(self._mip_buffer)
@@ -165,7 +165,7 @@ class CustomEvalCallback(EvalCallback):
                     print(f"MIP: {mean_mip:.2f} +/- {std_cre:.2f}%")
                     print(self._mip_buffer)
                 self.logger.record("eval/mean_mip", mean_mip)
-                self.logger.record("eval/std_mip", std_mip)
+                # self.logger.record("eval/std_mip", std_mip)
 
             # Dump log so the evaluation results are printed with the correct timestep
             self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")

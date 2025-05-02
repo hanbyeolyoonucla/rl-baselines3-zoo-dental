@@ -19,6 +19,7 @@ from stable_baselines3.common.torch_layers import (
 )
 from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
 from hyperparams.python.ppo_config import hyperparams
+from traction import Traction
 
 
 class Actor(BasePolicy):
@@ -304,6 +305,7 @@ class IBRLPolicy(BasePolicy):
         
         self.bc_policy = CustomActorCriticPolicy.load(self.bc_policy_path)
         print(f'bc_policy_path: {self.bc_policy_path}')
+        self.traction = Traction()
 
         # actor
         # self.actor = self.make_actor(features_extractor=hyperparams["DentalEnv6D-v0"]['policy_kwargs']['features_extractor_class'])
@@ -427,12 +429,17 @@ class IBRLPolicy(BasePolicy):
             if use_actor_proposal:
                 # actions = self.actor_target(obs_tensor)
                 bc_actions, _, _ = self.bc_policy.forward(obs_tensor, deterministic=deterministic)
+                # bc_actions = self.traction.predict(obs_tensor)
+                # bc_actions = th.as_tensor(bc_actions, device=self.device).unsqueeze(0).float()
+                # bc_noises = bc_actions.clone().data.normal_(0, 0.1)
+                # bc_actions = (bc_actions + bc_noises).clamp(-1, 1)
                 rl_noises = bc_actions.clone().data.normal_(0, 0.1)  # rollout noise
                 rl_actions = (self.actor.forward(obs_tensor) + rl_noises).clamp(-1, 1)
                 rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
                 bsize, num_actions, _ = rl_bc_actions.size()
-                # print(f'bc action (rollout): {bc_actions}')
-                # print(f'actor action (rollout): {rl_actions}')
+                print(f'bc action (rollout): {bc_actions}')
+                # print(f'bc action (rollout): {bc_actions_model}')
+                print(f'actor action (rollout): {rl_actions}')
 
                 rl_q_values = th.cat(self.critic_target(obs_tensor, rl_actions), dim=1)
                 rl_q_values, _ = th.min(rl_q_values, dim=1, keepdim=True)
@@ -442,7 +449,7 @@ class IBRLPolicy(BasePolicy):
                 greedy_action_idx = rl_bc_q_values.argmax(dim=1)
                 actions = rl_bc_actions[range(bsize), greedy_action_idx]
                 # print(f'proposal greedy_action_idx shape: {greedy_action_idx.shape}')
-                # print(f'proposal bc action ratio: {th.mean(greedy_action_idx.float()):.2%}')
+                print(f'proposal traction action ratio: {th.mean(greedy_action_idx.float()):.2%}')
             else:
                 actions = self._predict(obs_tensor, deterministic=deterministic)
                 print(f'Actor target predicted action: {actions}')

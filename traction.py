@@ -1,4 +1,5 @@
 import numpy as np
+import torch as th
 import open3d as o3d
 import copy
 from scipy.ndimage import affine_transform, zoom
@@ -7,6 +8,102 @@ import os
 from tqdm import tqdm
 import pandas as pd
 
+
+class Traction:
+    def __init__(self):
+        # Initialize burr
+        self._burr = o3d.io.read_triangle_mesh('dental_env/cad/burr.stl')
+        self._burr_center = self._burr.get_center()
+        self._resolution = 0.102  # resolution of each voxel: 102 micron
+        self._state_label = {"decay": 1, "enamel": 2, "dentin": 3}
+        self._state_shape = np.array([60, 60, 60])
+
+    def predict(self, obs, force_weights=np.array([10, 2, 3]), moment_weights=np.array([10, 2, 3])):
+
+        # weights
+        wfc, wfe, wfd = force_weights
+        wmc, wme, wmd = moment_weights
+
+        # parse obs dict
+        burr_pos = obs["burr_pos"]
+        burr_rot = obs["burr_rot"]
+        voxel = obs["voxel"]
+
+        # tensor to numpy
+        if isinstance(burr_pos, th.Tensor):
+            burr_pos = burr_pos.squeeze().cpu().detach().numpy()
+        else:
+            burr_pos = np.squeeze(burr_pos)
+        if isinstance(burr_rot, th.Tensor):
+            burr_rot = burr_rot.squeeze().cpu().detach().numpy()
+        else:
+            burr_rot = np.squeeze(burr_rot)
+        if isinstance(voxel, th.Tensor):
+            voxel = voxel.squeeze().cpu().detach().numpy()
+        else:
+            voxel = np.squeeze(voxel)
+
+        # denormalize pos
+        burr_pos = (burr_pos + 1) * self._state_shape/2 * self._resolution
+
+        # convert voxel to pcd
+        caries_points = ((np.argwhere(voxel[self._state_label['decay']-1] == 1) + 1 / 2) * self._resolution).astype(np.float32)
+        enamel_points = ((np.argwhere(voxel[self._state_label['enamel']-1] == 1) + 1 / 2) * self._resolution).astype(np.float32)
+        dentin_points = ((np.argwhere(voxel[self._state_label['dentin']-1] == 1) + 1 / 2) * self._resolution).astype(np.float32)
+
+        # update burr
+        self._burr.translate(self._burr_center + burr_pos, relative=False)
+        self._burr.rotate(UnitQuaternion(burr_rot).SO3().A, center=burr_pos)  # make sure rotate it back
+
+        # calculate signed distance and compute action
+        burr_geom = o3d.t.geometry.TriangleMesh.from_legacy(self._burr)
+        scene = o3d.t.geometry.RaycastingScene()
+        _ = scene.add_triangles(burr_geom)  # we do not need the geometry ID for mesh
+
+        # signed distance vector
+        eps = 1e-5
+        bur_caries = scene.compute_closest_points(caries_points)['points'].numpy()
+        bur_enamel = scene.compute_closest_points(enamel_points)['points'].numpy()
+        bur_dentin = scene.compute_closest_points(dentin_points)['points'].numpy()
+        self._burr.rotate(UnitQuaternion(burr_rot).SO3().A.transpose(), center=burr_pos)  # make sure rotate it back
+        caries_moment_arm = bur_caries - burr_pos
+        enamel_moment_arm = bur_enamel - burr_pos
+        dentin_moment_arm = bur_dentin - burr_pos
+        caries_to_bur = bur_caries - caries_points
+        enamel_to_bur = bur_enamel - enamel_points
+        dentin_to_bur = bur_dentin - dentin_points
+
+        bound = 0.5
+        enamel_mask = np.linalg.norm(enamel_to_bur, axis=1) <= bound
+        enamel_to_bur = enamel_to_bur[enamel_mask]
+        enamel_moment_arm = enamel_moment_arm[enamel_mask]
+        dentin_mask = np.linalg.norm(dentin_to_bur, axis=1) <= bound
+        dentin_to_bur = dentin_to_bur[dentin_mask]
+        dentin_moment_arm = dentin_moment_arm[dentin_mask]
+        caries_mask = np.linalg.norm(caries_to_bur, axis=1) <= bound
+
+        mc = np.cross(caries_moment_arm[caries_mask], -caries_to_bur[caries_mask]).mean(axis=0) if caries_to_bur[
+            caries_mask].any() else np.zeros(3)
+        me = np.cross(enamel_moment_arm, enamel_to_bur).mean(axis=0) if enamel_to_bur.any() else np.zeros(3)
+        md = np.cross(dentin_moment_arm, dentin_to_bur).mean(axis=0) if dentin_to_bur.any() else np.zeros(3)
+        # min_dist = np.linalg.norm(caries_to_bur, axis=1).min() if caries_to_bur.any() else np.zeros(3)
+        caries_to_bur = (caries_to_bur / ((caries_to_bur ** 2).sum(axis=1, keepdims=True) + eps)).mean(
+            axis=0) if caries_to_bur.any() else np.zeros(3)
+        enamel_to_bur = (enamel_to_bur / ((enamel_to_bur ** 2).sum(axis=1, keepdims=True) + eps)).mean(
+            axis=0) if enamel_to_bur.any() else np.zeros(3)
+        dentin_to_bur = (dentin_to_bur / ((dentin_to_bur ** 2).sum(axis=1, keepdims=True) + eps)).mean(
+            axis=0) if dentin_to_bur.any() else np.zeros(3)
+
+        # visualize
+        action = -wfc * caries_to_bur + wfe * enamel_to_bur + wfd * dentin_to_bur
+        action = action / np.linalg.norm(action) * 0.1  # max(min(min_dist, 0.1), 0.01)
+        rotation = wmc * mc + wme * me + wmd * md
+        rotation = rotation / np.linalg.norm(rotation) if rotation.any() else np.zeros(3)
+        curr_quat = UnitQuaternion.AngVec(0.5, rotation, unit='deg') * UnitQuaternion(burr_rot) if rotation.any() else UnitQuaternion(burr_rot)
+        quat_action = UnitQuaternion(burr_rot).inv() * curr_quat
+        rpy_action = quat_action.rpy(unit='deg')
+
+        return np.concatenate((action, rpy_action))
 
 def bounding_box(state, res):
     x, y, z = state.shape

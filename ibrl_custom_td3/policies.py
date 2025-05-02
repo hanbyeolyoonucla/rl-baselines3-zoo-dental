@@ -19,7 +19,7 @@ from stable_baselines3.common.torch_layers import (
 )
 from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
 from hyperparams.python.ppo_config import hyperparams
-
+from traction import Traction
 
 class Actor(BasePolicy):
     """
@@ -64,6 +64,7 @@ class Actor(BasePolicy):
         # actor_net = create_mlp(features_dim, action_dim, net_arch, activation_fn, squash_output=True)
         if len(net_arch) > 0:
             actor_net = [nn.Linear(features_dim, net_arch[0], bias=True),
+                         nn.LayerNorm(net_arch[0]),
                          nn.Dropout(p=0.5, inplace=False),
                          activation_fn(),]
         else:
@@ -71,6 +72,7 @@ class Actor(BasePolicy):
 
         for idx in range(len(net_arch) - 1):
             actor_net.append(nn.Linear(net_arch[idx], net_arch[idx + 1], bias=True))
+            actor_net.append(nn.LayerNorm(net_arch[idx+1]))
             actor_net.append(nn.Dropout(p=0.5, inplace=False))  # IBRL dropout
             actor_net.append(activation_fn())
 
@@ -98,9 +100,9 @@ class Actor(BasePolicy):
         # assert deterministic, 'The TD3 actor only outputs deterministic actions'
         # Learn the features extractor using the policy loss only --> HBY: using the critic loss only
         # when the features_extractor is shared with the actor
-        with th.set_grad_enabled(not self.share_features_extractor):
-            features = self.extract_features(obs, self.features_extractor)
-        return self.mu(features)
+        # with th.set_grad_enabled(not self.share_features_extractor):
+        features = self.extract_features(obs, self.features_extractor)
+        return self.mu(features) * 0.1  # to scale it so that it matches with bc action scale
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
         # Note: the deterministic deterministic parameter is ignored in the case of TD3.
@@ -186,7 +188,8 @@ class Critic(BaseModel):
             self.q_networks.append(q_net)
 
     def forward(self, obs: th.Tensor, actions: th.Tensor) -> Tuple[th.Tensor, ...]:
-        features = self.extract_features(obs, self.features_extractor)  # update feature extractor based on critic loss
+        with th.set_grad_enabled(not self.share_features_extractor):
+            features = self.extract_features(obs, self.features_extractor)  # update feature extractor based on critic loss
         qvalue_input = th.cat([features, actions], dim=1)
         return tuple(q_net(qvalue_input) for q_net in self.q_networks)
 
@@ -244,7 +247,7 @@ class CustomTD3Policy(BasePolicy):
         n_critics: int = 2,
         share_features_extractor: bool = True,
         bc_policy: Optional[BasePolicy] = None,
-        bc_policy_path: str = 'models/bc_traction_policy_20',
+        bc_policy_path: str = 'models/bc_traction_policy_30',
         use_bc_features_extractor: bool = True,
         freeze_features_extractor: bool = False,
     ):
@@ -297,8 +300,10 @@ class CustomTD3Policy(BasePolicy):
 
     def _build(self, lr_schedule: Schedule) -> None:
 
-        bc_policy = CustomActorCriticPolicy.load(self.bc_policy_path)
+        if self.bc_policy_path and self.use_bc_features_extractor:
+            bc_policy = CustomActorCriticPolicy.load(self.bc_policy_path)
         print(f'bc_policy_path: {self.bc_policy_path}')
+        self.traction = Traction()
 
         # actor
         # self.actor = self.make_actor(features_extractor=hyperparams["DentalEnv6D-v0"]['policy_kwargs']['features_extractor_class'])
@@ -380,6 +385,98 @@ class CustomTD3Policy(BasePolicy):
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
         return self.actor_target(observation)
+    
+    def predict(
+        self,
+        observation: Union[np.ndarray, dict[str, np.ndarray]],
+        state: Optional[tuple[np.ndarray, ...]] = None,
+        episode_start: Optional[np.ndarray] = None,
+        deterministic: bool = False,
+        use_actor_proposal: bool = False,
+    ) -> tuple[np.ndarray, Optional[tuple[np.ndarray, ...]]]:
+        """
+        Get the policy action from an observation (and optional hidden state).
+        Includes sugar-coating to handle different observations (e.g. normalizing images).
+
+        :param observation: the input observation
+        :param state: The last hidden states (can be None, used in recurrent policies)
+        :param episode_start: The last masks (can be None, used in recurrent policies)
+            this correspond to beginning of episodes,
+            where the hidden states of the RNN must be reset.
+        :param deterministic: Whether or not to return deterministic actions.
+        :return: the model's action and the next hidden state
+            (used in recurrent policies)
+        """
+        # Switch to eval mode (this affects batch norm / dropout)
+        self.set_training_mode(False)
+
+        # Check for common mistake that the user does not mix Gym/VecEnv API
+        # Tuple obs are not supported by SB3, so we can safely do that check
+        if isinstance(observation, tuple) and len(observation) == 2 and isinstance(observation[1], dict):
+            raise ValueError(
+                "You have passed a tuple to the predict() function instead of a Numpy array or a Dict. "
+                "You are probably mixing Gym API with SB3 VecEnv API: `obs, info = env.reset()` (Gym) "
+                "vs `obs = vec_env.reset()` (SB3 VecEnv). "
+                "See related issue https://github.com/DLR-RM/stable-baselines3/issues/1694 "
+                "and documentation for more information: https://stable-baselines3.readthedocs.io/en/master/guide/vec_envs.html#vecenv-api-vs-gym-api"
+            )
+
+        obs_tensor, vectorized_env = self.obs_to_tensor(observation)
+
+        with th.no_grad():
+            if use_actor_proposal:
+                # actions = self.actor_target(obs_tensor)
+                # bc_actions, _, _ = self.bc_policy.forward(obs_tensor, deterministic=deterministic)
+                # bc_noises = bc_actions.clone().data.normal_(0, 0.1)
+                bc_actions = self.traction.predict(obs_tensor)
+                # bc_actions = self.traction.predict(obs_tensor,
+                #                                    force_weights=np.random.normal([10, 2, 3], 1).clip(1e-5),
+                #                                    moment_weights=np.random.normal([10, 2, 3], 1).clip(1e-5))
+                bc_actions = th.as_tensor(bc_actions, device=self.device).unsqueeze(0).float()
+                # bc_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=self.device))
+                bc_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.1, 0.1, 0.1, 0.5, 0.5, 0.5], device=self.device))
+                bc_actions = (bc_actions + bc_noises).clamp(-1, 1)
+
+                # rl_noises = bc_actions.clone().data.normal_(0, 0.1)  # rollout noise
+                # rl_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=self.device))
+                rl_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.1, 0.1, 0.1, 0.5, 0.5, 0.5], device=self.device))
+                rl_actions = (self.actor.forward(obs_tensor) + rl_noises).clamp(-1, 1)
+                rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
+                bsize, num_actions, _ = rl_bc_actions.size()
+                print(f'traction action (rollout): {bc_actions}')
+                # print(f'bc action (rollout): {bc_actions_model}')
+                print(f'actor action (rollout): {rl_actions}')
+
+                rl_q_values = th.cat(self.critic_target(obs_tensor, rl_actions), dim=1)
+                rl_q_values, _ = th.min(rl_q_values, dim=1, keepdim=True)
+                bc_q_values = th.cat(self.critic_target(obs_tensor, bc_actions), dim=1)
+                bc_q_values, _ = th.min(bc_q_values, dim=1, keepdim=True)
+                rl_bc_q_values = th.cat((rl_q_values, bc_q_values), dim=1)
+                greedy_action_idx = rl_bc_q_values.argmax(dim=1)
+                actions = rl_bc_actions[range(bsize), greedy_action_idx]
+                # print(f'proposal greedy_action_idx shape: {greedy_action_idx.shape}')
+                print(f'proposal traction action ratio: {th.mean(greedy_action_idx.float()):.2%}')
+            else:
+                actions = self._predict(obs_tensor, deterministic=deterministic)
+                print(f'Actor target predicted action: {actions}')
+        # Convert to numpy, and reshape to the original action shape
+        actions = actions.cpu().numpy().reshape((-1, *self.action_space.shape))  # type: ignore[misc, assignment]
+
+        if isinstance(self.action_space, spaces.Box):
+            if self.squash_output:
+                # Rescale to proper domain when using squashing
+                actions = self.unscale_action(actions)  # type: ignore[assignment, arg-type]
+            else:
+                # Actions could be on arbitrary scale, so clip the actions to avoid
+                # out of bound error (e.g. if sampling from a Gaussian distribution)
+                actions = np.clip(actions, self.action_space.low, self.action_space.high)  # type: ignore[assignment, arg-type]
+
+        # Remove batch dimension if needed
+        if not vectorized_env:
+            assert isinstance(actions, np.ndarray)
+            actions = actions.squeeze(axis=0)
+
+        return actions, state  # type: ignore[return-value]
 
     def set_training_mode(self, mode: bool) -> None:
         """

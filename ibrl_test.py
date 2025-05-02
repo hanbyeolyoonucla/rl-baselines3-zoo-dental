@@ -24,13 +24,13 @@ config = dict(
     buffer_size=12_000,
     bc_buffer_size=12_000,
     learning_starts=5_000,
-    learning_rate=1e-4,
+    learning_rate=1e-5,
     batch_size=512,
     rl_bc_batch_ratio=0.5,
-    train_freq=(1, "step"), #(1, "episode"),  # (2, "step")
+    train_freq=(2, "step"), #(1, "episode"),  # (2, "step")
     tau=0.1,
     target_policy_noise=0.1,
-    target_policy_clip=0.3,
+    target_policy_clip=0.2,
     policy_delay=5,
     policy_kwargs=dict(
                 activation_fn=nn.ReLU,
@@ -39,7 +39,7 @@ config = dict(
                 share_features_extractor=False,
                 net_arch=dict(pi=[1024, 1024], qf=[1024, 1024]),
                 normalize_images=False,
-                bc_policy_path=f'models/bc_traction_policy_20',
+                bc_policy_path=f'models/bc_traction_policy_30',
                 use_bc_features_extractor=True,
                 freeze_features_extractor=False,
             ),
@@ -67,8 +67,8 @@ env = gym.make("DentalEnvPCD-v0",
 env = Monitor(env)
 
 # define callbacks
-eval_callback = CustomEvalCallback(env, best_model_save_path='models/ibrl_one_tooth',
-                                   log_path=None, eval_freq=1_000,
+eval_callback = CustomEvalCallback(env, best_model_save_path=f'models/ibrl_best_models/{run.id}',
+                                   log_path=None, eval_freq=5_000,
                                    n_eval_episodes=1,  # because of using one env
                                    deterministic=True, render=False)
 

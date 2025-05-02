@@ -104,8 +104,8 @@ class DentalEnvPCD(gym.Env):
             "tooth": self._tooth,
             "decay_remained": curr_num_decay,
             "decay_removal": (self._init_num_decay - curr_num_decay) / self._init_num_decay,
-            "enamel_damage": (self._init_num_enamel - curr_num_enamel),  # / self._init_num_enamel
-            "dentin_damage": (self._init_num_dentin - curr_num_dentin),  #  / self._init_num_dentin
+            "enamel_damage": (self._init_num_enamel - curr_num_enamel) / self._init_num_enamel,
+            "dentin_damage": (self._init_num_dentin - curr_num_dentin) / self._init_num_enamel,
             "initial_caries": self._init_num_decay,
             "processed_cavity": processed_cavity,
             "CRE": curr_num_decay / self._init_num_decay,
@@ -161,12 +161,19 @@ class DentalEnvPCD(gym.Env):
         self._decay_pcd = o3d.geometry.PointCloud()
         self._enamel_pcd = o3d.geometry.PointCloud()
         self._dentin_pcd = o3d.geometry.PointCloud()
+        # for 2d visualization
+        # self._decay_points = self._decay_points[self._decay_points[:, 1] > 3.8]
+        # self._enamel_points = self._enamel_points[self._enamel_points[:, 1] > 3.8]
+        # self._dentin_points = self._dentin_points[self._dentin_points[:, 1] > 3.8]
+        # self._decay_points = self._decay_points[self._decay_points[:, 1] < 4]
+        # self._enamel_points = self._enamel_points[self._enamel_points[:, 1] < 4]
+        # self._dentin_points = self._dentin_points[self._dentin_points[:, 1] < 4]
         self._decay_pcd.points = o3d.utility.Vector3dVector(self._decay_points)
         self._enamel_pcd.points = o3d.utility.Vector3dVector(self._enamel_points)
         self._dentin_pcd.points = o3d.utility.Vector3dVector(self._dentin_points)
-        self._decay_pcd.paint_uniform_color([0.3, 0.3, 0.3])
-        self._enamel_pcd.paint_uniform_color([0.95, 0.95, 0.95])
-        self._dentin_pcd.paint_uniform_color([0.95, 0.95, 0.99])
+        self._decay_pcd.paint_uniform_color([0.1, 0.1, 0.1])
+        self._enamel_pcd.paint_uniform_color([0.9, 0.9, 0.9])
+        self._dentin_pcd.paint_uniform_color([0.7, 0.7, 0.7])
 
         # state initialization
         decay_idx = (self._decay_points / self._resolution - 1/2).astype(int)
@@ -236,9 +243,9 @@ class DentalEnvPCD(gym.Env):
         self._decay_pcd.points = o3d.utility.Vector3dVector(self._decay_points)
         self._enamel_pcd.points = o3d.utility.Vector3dVector(self._enamel_points)
         self._dentin_pcd.points = o3d.utility.Vector3dVector(self._dentin_points)
-        self._decay_pcd.paint_uniform_color([0.3, 0.3, 0.3])
-        self._enamel_pcd.paint_uniform_color([0.95, 0.95, 0.95])
-        self._dentin_pcd.paint_uniform_color([0.95, 0.95, 0.99])
+        self._decay_pcd.paint_uniform_color([0.1, 0.1, 0.1])
+        self._enamel_pcd.paint_uniform_color([0.9, 0.9, 0.9])
+        self._dentin_pcd.paint_uniform_color([0.7, 0.7, 0.7])
 
         # collision check
         self._collision = False
@@ -258,13 +265,18 @@ class DentalEnvPCD(gym.Env):
         #           - 10*reward_enamel_removal
         #           - 100*reward_dentin_removal
         #           - 100*self._collision)*0.001
+        # reward = (10*reward_decay_removal/self._init_num_decay
+        #           - 2*reward_enamel_removal/self._init_num_enamel
+        #           - 3*reward_dentin_removal/self._init_num_dentin
+        #           - 5*self._collision)
+        # reward = (10*reward_decay_removal/self._init_num_decay
+        #           - 0.5*reward_enamel_removal/self._init_num_decay
+        #           - 1*reward_dentin_removal/self._init_num_decay
+        #           - 5*self._collision)
         reward = (10*reward_decay_removal/self._init_num_decay
-                  - 2*reward_enamel_removal/self._init_num_enamel
-                  - 3*reward_dentin_removal/self._init_num_dentin
-                  - 5*self._collision)
-        # reward = 1000*reward_decay_removal - 1*reward_enamel_removal - 1*reward_dentin_removal\
-        #          - 1*self._collision
-        # reward = reward_decay_removal
+                  - 0.5*reward_enamel_removal/self._init_num_decay
+                  - 1*reward_dentin_removal/self._init_num_decay
+                  - 10*self._collision)
 
         # state
         decay_idx = (self._decay_points / self._resolution - 1/2).astype(int)
@@ -277,7 +289,9 @@ class DentalEnvPCD(gym.Env):
         self._states[self._state_label['dentin']-1, dentin_idx[:, 0], dentin_idx[:, 1], dentin_idx[:, 2]] = 1
 
         # termination
-        terminated = ~np.any(self._states[self._state_label['decay']-1]) or self._collision # or reward_dentin_removal > 0  # no more decay
+        is_success = ~np.any(self._states[self._state_label['decay']-1])
+        reward += 10 * is_success
+        terminated = is_success or self._collision # or reward_dentin_removal > 0  # no more decay
 
         observation = self._get_obs()
         info = self._get_info()

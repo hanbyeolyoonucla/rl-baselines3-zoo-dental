@@ -94,8 +94,8 @@ class IBRL(OffPolicyAlgorithm):
             tau: float = 0.005,
             gamma: float = 0.99,
             train_freq: Union[int, tuple[int, str]] = 1,
-            model_save_freq: int = 10_000,
-            model_save_path: str = f'models/',
+            # model_save_freq: int = 10_000,
+            # model_save_path: str = f'models/',
             gradient_steps: int = 1,
             action_noise: Optional[ActionNoise] = None,  # NormalActionNoise(0*np.ones(6), 0.2*np.ones(6)),
             replay_buffer_class: Optional[type[ReplayBuffer]] = None,
@@ -149,8 +149,8 @@ class IBRL(OffPolicyAlgorithm):
         self.bc_replay_buffer_path = bc_replay_buffer_path
 
         # model save freq
-        self.model_save_freq = model_save_freq
-        self.model_save_path = model_save_path
+        # self.model_save_freq = model_save_freq
+        # self.model_save_path = model_save_path
 
         if _init_setup_model:
             self._setup_model()
@@ -308,13 +308,13 @@ class IBRL(OffPolicyAlgorithm):
             # Delayed policy updates
             if self._n_updates % self.policy_delay == 0:
                 # Compute actor loss using q1
-                actor_loss = -self.critic.q1_forward(replay_data.observations,
-                                                     self.actor(replay_data.observations)).mean()
+                # actor_loss = -self.critic.q1_forward(replay_data.observations,
+                #                                      self.actor(replay_data.observations)).mean()
                 # Compute actor loss using minimum q
-                # actor_q_values = th.cat(self.critic.forward(replay_data.observations,
-                #                                             self.actor(replay_data.observations)), dim=1)
-                # rl_next_q_values, _ = th.min(actor_q_values, dim=1, keepdim=True)
-                # actor_loss = -rl_next_q_values.mean()
+                actor_q_values = th.cat(self.critic.forward(replay_data.observations,
+                                                            self.actor(replay_data.observations)), dim=1)
+                rl_next_q_values, _ = th.min(actor_q_values, dim=1, keepdim=True)
+                actor_loss = -rl_next_q_values.mean()
                 actor_losses.append(actor_loss.item())
                 # print(f'mean actor q values q1 and q2: {th.mean(actor_q_values, 0)}')
 
@@ -328,8 +328,8 @@ class IBRL(OffPolicyAlgorithm):
                 # Copy running stats, see GH issue #996
                 polyak_update(self.critic_batch_norm_stats, self.critic_batch_norm_stats_target, 1.0)
                 polyak_update(self.actor_batch_norm_stats, self.actor_batch_norm_stats_target, 1.0)
-            if self._n_updates % self.model_save_freq == 0:
-                self.save(self.model_save_path+f'_{self._n_updates}')
+            # if self._n_updates % self.model_save_freq == 0:
+            #     self.save(self.model_save_path+f'_{self._n_updates}')
         self.logger.record("train/n_updates", self._n_updates, exclude="tensorboard")
         if len(actor_losses) > 0:
             self.logger.record("train/actor_loss", np.mean(actor_losses))

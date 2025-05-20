@@ -23,10 +23,10 @@ import yaml
 config = dict(
     total_timesteps=100_000,
     buffer_size=10_000,
-    learning_starts=5_000,
+    learning_starts=10_000,
     learning_rate=1e-5,
     batch_size=512,
-    train_freq=(2, "step"),
+    train_freq=(1, "step"),
     tau=0.01,
     # action_noise_mu=0,
     # action_noise_std=0.1,
@@ -45,9 +45,9 @@ config = dict(
                 freeze_features_extractor=False,
             ),
     bc_replay_buffer_path=None,  #
-    env_max_episode_steps=200,
+    env_max_episode_steps=100,
     stats_window_size=10,
-    gamma=0.99,
+    gamma=1,
 )
 
 # Initiate train logger (wandb)
@@ -57,15 +57,14 @@ run = wandb.init(
     sync_tensorboard=True,  # auto-upload sb3's tensorboard metrics
 )
 
-# Save config pickle
-with open(f'models/configs/dental_td3_{run.id}.pkl', 'wb') as f:
-    pickle.dump(config, f)
-
 # Define environment
 env = gym.make("DentalEnvPCD-v0",
                render_mode=None,
                max_episode_steps=config["env_max_episode_steps"],
-               tooth='tooth_3_1.0_None_top_0_144_313_508')  #  tooth='tooth_2_1.1_None_top_1_158_346_562'
+                tooth='tooth_4_1.0_None_top_2_197_295_494')
+                # tooth='tooth_2_1.0_None_top_1_119_303_490'
+                # tooth='tooth_4_1.0_None_top_2_197_295_494'
+                # tooth='tooth_3_1.0_None_top_0_144_313_508'
 env = Monitor(env)
 
 # define callbacks

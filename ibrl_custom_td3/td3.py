@@ -327,14 +327,12 @@ class CustomTD3(OffPolicyAlgorithm):
         """
         # Select action randomly or according to policy
         if self.num_timesteps < learning_starts and not (self.use_sde and self.use_sde_at_warmup):
-            # Warmup phase
-            unscaled_action = np.array([self.action_space.sample() for _ in range(n_envs)])
-            # Warmup phase - traction rendom actions
+            # unscaled_action = np.array([self.action_space.sample() for _ in range(n_envs)]) # Warmup phase - random action
             # unscaled_action = self.policy.traction.predict(self._last_obs,
             #                                                force_weights=np.random.normal([10, 2, 3], 3).clip(1e-5),
-            #                                                moment_weights=np.random.normal([10, 2, 3], 3).clip(1e-5))[np.newaxis]
+            #                                                moment_weights=np.random.normal([10, 2, 3], 3).clip(1e-5))[np.newaxis] # Warmup phase - traction param rendom actions
             unscaled_action = self.policy.traction.predict(self._last_obs)[np.newaxis]
-            unscaled_action += np.random.normal(0, [0.1, 0.1, 0.1, 0.5, 0.5, 0.5])
+            unscaled_action += np.random.normal(0, [0.1, 0.1, 0.1, 0.5, 0.5, 0.5]) # Warmup phase - traction rendom noise actions
         else:
             # Note: when using continuous actions,
             # we assume that the policy uses tanh to scale the action

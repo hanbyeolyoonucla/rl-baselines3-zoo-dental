@@ -425,17 +425,20 @@ class CustomTD3Policy(BasePolicy):
 
         with th.no_grad():
             if use_actor_proposal:
+
                 # actions = self.actor_target(obs_tensor)
                 # bc_actions, _, _ = self.bc_policy.forward(obs_tensor, deterministic=deterministic)
                 # bc_noises = bc_actions.clone().data.normal_(0, 0.1)
-                bc_actions = self.traction.predict(obs_tensor)
-                # bc_actions = self.traction.predict(obs_tensor,
-                #                                    force_weights=np.random.normal([10, 2, 3], 1).clip(1e-5),
-                #                                    moment_weights=np.random.normal([10, 2, 3], 1).clip(1e-5))
+
+                bc_actions = self.traction.predict(obs_tensor,
+                                                   force_weights=np.random.normal([10, 2, 3], 1).clip(1e-5),
+                                                   moment_weights=np.random.normal([10, 2, 3], 1).clip(1e-5))
                 bc_actions = th.as_tensor(bc_actions, device=self.device).unsqueeze(0).float()
+
+                # bc_actions = self.traction.predict(obs_tensor)
                 # bc_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=self.device))
-                bc_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.1, 0.1, 0.1, 0.5, 0.5, 0.5], device=self.device))
-                bc_actions = (bc_actions + bc_noises).clamp(-1, 1)
+                # bc_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.1, 0.1, 0.1, 0.5, 0.5, 0.5], device=self.device))
+                # bc_actions = (bc_actions + bc_noises).clamp(-1, 1)
 
                 # rl_noises = bc_actions.clone().data.normal_(0, 0.1)  # rollout noise
                 # rl_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=self.device))

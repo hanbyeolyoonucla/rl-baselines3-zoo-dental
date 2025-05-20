@@ -20,7 +20,7 @@ from traction import Traction
 if __name__ == "__main__":
 
     # select model
-    policy_type = ['demo', 'random', 'IL', 'TD3', 'IBRL'][3]
+    policy_type = ['demo', 'random', 'IL', 'TD3', 'IBRL'][1]
     model = ['coverage', 'traction', 'human'][1]
     apf = Traction()
 
@@ -29,11 +29,20 @@ if __name__ == "__main__":
     # dirlist = os.listdir(tooth_dir)
     # fname = dirlist[np.random.randint(1, len(dirlist))]
     # tooth = fname[:-4]
-    tooth='tooth_3_1.0_None_top_0_144_313_508'
-    # tooth='tooth_2_1.1_None_top_1_158_346_562'
+    tooth='tooth_3_1.0_None_top_0_144_313_508'  # MIP: 7.494094488188976
+    # tooth='tooth_3_1.0_None_top_1_227_258_489'  # MIP: 7.002118644067797
+    # tooth='tooth_2_1.0_None_top_1_119_303_490'  # MIP: 5.384761904761905 traverse: 14.8/67.0
+    # tooth='tooth_2_1.0_None_top_3_228_317_483'  # MIP: 7.802105263157895
+    # tooth='tooth_2_1.0_None_top_4_284_262_509'  # MIP: 9.994252873563218
+    # tooth='tooth_4_1.0_None_top_1_142_349_479'  # MIP: 4.699074074074074
+    # tooth='tooth_4_1.0_None_top_2_197_295_494'  # MIP: 5.74375
+    # tooth='tooth_4_1.0_None_top_3_190_229_502'  # MIP: 8.657777777777778
+    # tooth='tooth_5_1.0_None_top_0_272_249_489'  # MIP: 13.678571428571429
+    # tooth='tooth_5_1.0_None_top_1_118_219_484'  # MIP: 11.854961832061068
+    # tooth='tooth_5_1.0_None_top_2_159_241_487'  # MIP: 7.428571428571429
 
     # Initialize gym environment
-    env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=200, tooth=tooth)
+    env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=200, tooth=tooth)  #
     state, info = env.reset(seed=42)
 
     if policy_type == "demo":
@@ -44,7 +53,9 @@ if __name__ == "__main__":
     elif policy_type == "TD3":
         # policy = CustomTD3.load(f'models/dental_td3_ak9uohu2.zip')
         # policy = CustomTD3.load(f'models/best_best/best_model.zip', bc_replay_buffer_path=None)
-        policy = CustomTD3.load(f'models/td3_best_models/pa9mjcwi/best_model.zip', bc_replay_buffer_path=None)
+        # policy = CustomTD3.load(f'models/td3_best_models/pa9mjcwi/best_model.zip', bc_replay_buffer_path=None)
+        # policy = CustomTD3.load(f'models/td3_best_models/sv9kblsv/best_model.zip', bc_replay_buffer_path=None)
+        policy = CustomTD3.load(f'models/dental_td3_sv9kblsv.zip', bc_replay_buffer_path=None)
     elif policy_type == "IBRL":
         # policy = IBRL.load(f'models/ibrl_ezf2013i.zip', bc_replay_buffer_path=None)
         # policy = IBRL.load(f'models/ibrl_sgvy41b4.zip', bc_replay_buffer_path=None)
@@ -64,10 +75,10 @@ if __name__ == "__main__":
             else:
                 break
         elif policy_type in ["IL", "TD3", "IBRL" ]:
-            action, _ = policy.predict(state, deterministic=True, use_actor_proposal=True)
+            action, _ = policy.predict(state, deterministic=True)
         else:  # random
             action = env.action_space.sample()
-            action = apf.predict(state)
+            # action = apf.predict(state)
         state, reward, terminated, truncated, info = env.step(action)
 
         total_reward = total_reward + reward

@@ -9,6 +9,7 @@ from stable_baselines3.common.policies import MultiInputActorCriticPolicy
 from stable_baselines3.common.utils import get_schedule_fn
 from stable_baselines3.common.monitor import Monitor
 from ibrl_td3.custom_callback import CustomEvalCallback
+from rrl_td3 import ResidualTD3
 from ibrl_custom_td3 import CustomTD3
 from ibrl_td3 import IBRL
 import wandb
@@ -23,13 +24,13 @@ import yaml
 config = dict(
     total_timesteps=100_000,
     buffer_size=10_000,
-    learning_starts=10_000,
+    learning_starts=5_000,
     learning_rate=1e-5,
     batch_size=512,
-    train_freq=(1, "step"),
+    train_freq=(2, "step"),
     tau=0.01,
-    # action_noise_mu=0,
-    # action_noise_std=0.1,
+    action_noise_mu=0,
+    action_noise_std=0.1,
     target_policy_noise=0.1,
     target_policy_clip=0.3,
     policy_delay=5,
@@ -41,13 +42,14 @@ config = dict(
                 net_arch=dict(pi=[1024, 1024], qf=[1024, 1024]),
                 normalize_images=False,
                 bc_policy_path=f'models/bc_traction_policy_30',  # for use of pre-trained features extractor from bc policy
-                use_bc_features_extractor=True,
+                use_bc_features_extractor=False,
                 freeze_features_extractor=False,
+                alpha=0.01,
             ),
     bc_replay_buffer_path=None,  #
-    env_max_episode_steps=100,
+    env_max_episode_steps=200,
     stats_window_size=10,
-    gamma=1,
+    gamma=0.99,
 )
 
 # Initiate train logger (wandb)
@@ -61,19 +63,27 @@ run = wandb.init(
 env = gym.make("DentalEnvPCD-v0",
                render_mode=None,
                max_episode_steps=config["env_max_episode_steps"],
-                tooth='tooth_4_1.0_None_top_2_197_295_494')
+               tooth='tooth_2_1.0_None_top_1_119_303_490')
                 # tooth='tooth_2_1.0_None_top_1_119_303_490'
                 # tooth='tooth_4_1.0_None_top_2_197_295_494'
                 # tooth='tooth_3_1.0_None_top_0_144_313_508'
 env = Monitor(env)
+# eval_env = gym.make("DentalEnvPCD-v0",
+#                render_mode=None,
+#                max_episode_steps=config["env_max_episode_steps"],
+#                 tooth='tooth_3_1.0_None_top_0_144_313_508')
+#                 # tooth='tooth_2_1.0_None_top_1_119_303_490'
+#                 # tooth='tooth_4_1.0_None_top_2_197_295_494'
+#                 # tooth='tooth_3_1.0_None_top_0_144_313_508'
+# eval_env = Monitor(eval_env)
 
 # define callbacks
 eval_callback = CustomEvalCallback(eval_env=env, best_model_save_path=f'models/td3_best_models/{run.id}',
                                    log_path=None, eval_freq=2_000,
                                    n_eval_episodes=1,
                                    deterministic=True, render=False)
-# Define train model
-model = CustomTD3("MultiInputPolicy", env, verbose=1,
+# Define train model  # CustomTD3  # ResidualTD3
+model = ResidualTD3("MultiInputPolicy", env, verbose=1,
                   learning_rate=config["learning_rate"],
                   buffer_size=config["buffer_size"],
                   learning_starts=config["learning_starts"],
@@ -84,7 +94,7 @@ model = CustomTD3("MultiInputPolicy", env, verbose=1,
                   target_policy_noise=config["target_policy_noise"],
                   target_noise_clip=config["target_policy_clip"],
                   tensorboard_log=f"runs/dental_td3_{run.id}",
-                  action_noise=None,  #NormalActionNoise(config["action_noise_mu"]*np.ones(6), config["action_noise_std"]*np.ones(6)),
+                  action_noise=NormalActionNoise(config["action_noise_mu"]*np.ones(6), config["action_noise_std"]*np.ones(6)),  #NormalActionNoise(config["action_noise_mu"]*np.ones(6), config["action_noise_std"]*np.ones(6)),
                   policy_kwargs=config['policy_kwargs'],
                   bc_replay_buffer_path=config['bc_replay_buffer_path'],
                   stats_window_size=config['stats_window_size'],

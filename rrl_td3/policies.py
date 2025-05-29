@@ -18,7 +18,6 @@ from stable_baselines3.common.torch_layers import (
     get_actor_critic_arch,
 )
 from stable_baselines3.common.type_aliases import PyTorchObs, Schedule
-from hyperparams.python.ppo_config import hyperparams
 from traction import Traction
 
 class Actor(BasePolicy):
@@ -102,7 +101,7 @@ class Actor(BasePolicy):
         # when the features_extractor is shared with the actor
         # with th.set_grad_enabled(not self.share_features_extractor):
         features = self.extract_features(obs, self.features_extractor)
-        return self.mu(features) * 0.1  # to scale it so that it matches with bc action scale
+        return self.mu(features)  # to scale it so that it matches with bc action scale
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
         # Note: the deterministic deterministic parameter is ignored in the case of TD3.
@@ -204,7 +203,7 @@ class Critic(BaseModel):
         return self.q_networks[0](th.cat([features, actions], dim=1))
     
 
-class CustomTD3Policy(BasePolicy):
+class ResidualTD3Policy(BasePolicy):
     """
     Policy class (with both actor and critic) for TD3.
 
@@ -250,6 +249,7 @@ class CustomTD3Policy(BasePolicy):
         bc_policy_path: str = 'models/bc_traction_policy_30',
         use_bc_features_extractor: bool = True,
         freeze_features_extractor: bool = False,
+        alpha: float = 0.1,
     ):
         super().__init__(
             observation_space,
@@ -295,6 +295,7 @@ class CustomTD3Policy(BasePolicy):
         self.bc_policy_path = bc_policy_path
         self.use_bc_features_extractor = use_bc_features_extractor
         self.freeze_features_extractor = freeze_features_extractor
+        self.alpha = alpha
 
         self._build(lr_schedule)
 
@@ -384,7 +385,7 @@ class CustomTD3Policy(BasePolicy):
         return self._predict(obs, deterministic=deterministic)
 
     def _predict(self, observation: PyTorchObs, deterministic: bool = False) -> th.Tensor:
-        return self.actor_target(observation)
+        return self.actor(observation)
     
     def predict(
         self,
@@ -392,7 +393,7 @@ class CustomTD3Policy(BasePolicy):
         state: Optional[tuple[np.ndarray, ...]] = None,
         episode_start: Optional[np.ndarray] = None,
         deterministic: bool = False,
-        use_actor_proposal: bool = False,
+        total_action: bool = True,
     ) -> tuple[np.ndarray, Optional[tuple[np.ndarray, ...]]]:
         """
         Get the policy action from an observation (and optional hidden state).
@@ -424,41 +425,18 @@ class CustomTD3Policy(BasePolicy):
         obs_tensor, vectorized_env = self.obs_to_tensor(observation)
 
         with th.no_grad():
-            if use_actor_proposal:
+            if total_action:
 
-                # actions = self.actor_target(obs_tensor)
-                # bc_actions, _, _ = self.bc_policy.forward(obs_tensor, deterministic=deterministic)
-                # bc_noises = bc_actions.clone().data.normal_(0, 0.1)
-
-                bc_actions = self.traction.predict(obs_tensor,
-                                                   force_weights=np.random.normal([10, 2, 3], 1).clip(1e-5),
-                                                   moment_weights=np.random.normal([10, 2, 3], 1).clip(1e-5))
+                bc_actions = self.traction.predict(obs_tensor)
                 bc_actions = th.as_tensor(bc_actions, device=self.device).unsqueeze(0).float()
-
-                # bc_actions = self.traction.predict(obs_tensor)
-                # bc_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=self.device))
-                # bc_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.1, 0.1, 0.1, 0.5, 0.5, 0.5], device=self.device))
-                # bc_actions = (bc_actions + bc_noises).clamp(-1, 1)
-
-                # rl_noises = bc_actions.clone().data.normal_(0, 0.1)  # rollout noise
-                # rl_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], device=self.device))
-                rl_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.1, 0.1, 0.1, 0.1, 0.1, 0.1], device=self.device))
-                rl_actions = (self.actor.forward(obs_tensor) + rl_noises).clamp(-1, 1)
-                rl_bc_actions = th.stack([rl_actions, bc_actions], dim=1)
-                bsize, num_actions, _ = rl_bc_actions.size()
+                # rl_noises = th.normal(mean=th.zeros(6, device=self.device), std=th.tensor([0.1, 0.1, 0.1, 0.1, 0.1, 0.1], device=self.device))
+                # rl_actions = (self.actor.forward(obs_tensor) + rl_noises).clamp(-1, 1)
+                rl_actions = self.actor_target.forward(obs_tensor)
                 print(f'traction action (rollout): {bc_actions}')
                 # print(f'bc action (rollout): {bc_actions_model}')
                 print(f'actor action (rollout): {rl_actions}')
 
-                rl_q_values = th.cat(self.critic_target(obs_tensor, rl_actions), dim=1)
-                rl_q_values, _ = th.min(rl_q_values, dim=1, keepdim=True)
-                bc_q_values = th.cat(self.critic_target(obs_tensor, bc_actions), dim=1)
-                bc_q_values, _ = th.min(bc_q_values, dim=1, keepdim=True)
-                rl_bc_q_values = th.cat((rl_q_values, bc_q_values), dim=1)
-                greedy_action_idx = rl_bc_q_values.argmax(dim=1)
-                actions = rl_bc_actions[range(bsize), greedy_action_idx]
-                # print(f'proposal greedy_action_idx shape: {greedy_action_idx.shape}')
-                print(f'proposal traction action ratio: {th.mean(greedy_action_idx.float()):.2%}')
+                actions = (1-self.alpha) * bc_actions + self.alpha * rl_actions
             else:
                 actions = self._predict(obs_tensor, deterministic=deterministic)
                 print(f'Actor target predicted action: {actions}')
@@ -493,9 +471,9 @@ class CustomTD3Policy(BasePolicy):
         self.critic.set_training_mode(mode)
         self.training = mode
 
-MlpPolicy = CustomTD3Policy
+MlpPolicy = ResidualTD3Policy
 
-class CnnPolicy(CustomTD3Policy):
+class CnnPolicy(ResidualTD3Policy):
     """
     Policy class (with both actor and critic) for TD3.
 
@@ -536,6 +514,7 @@ class CnnPolicy(CustomTD3Policy):
         bc_policy_path: str = 'models/bc_traction_policy_20',
         use_bc_features_extractor: bool = True,
         freeze_features_extractor: bool = False,
+        alpha: float = 0.1,
     ):
         super().__init__(
             observation_space,
@@ -554,10 +533,11 @@ class CnnPolicy(CustomTD3Policy):
             bc_policy_path,
             use_bc_features_extractor,
             freeze_features_extractor,
+            alpha,
         )
 
 
-class MultiInputPolicy(CustomTD3Policy):
+class MultiInputPolicy(ResidualTD3Policy):
     """
     Policy class (with both actor and critic) for TD3 to be used with Dict observation spaces.
 
@@ -598,6 +578,7 @@ class MultiInputPolicy(CustomTD3Policy):
         bc_policy_path: str = 'models/bc_traction_policy_20',
         use_bc_features_extractor: bool = True,
         freeze_features_extractor: bool = False,
+        alpha: float = 0.1,
     ):
         super().__init__(
             observation_space,
@@ -616,4 +597,5 @@ class MultiInputPolicy(CustomTD3Policy):
             bc_policy_path,
             use_bc_features_extractor,
             freeze_features_extractor,
+            alpha,
         )

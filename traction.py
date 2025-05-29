@@ -101,7 +101,7 @@ class Traction:
         rotation = rotation / np.linalg.norm(rotation) if rotation.any() else np.zeros(3)
         curr_quat = UnitQuaternion.AngVec(0.5, rotation, unit='deg') * UnitQuaternion(burr_rot) if rotation.any() else UnitQuaternion(burr_rot)
         quat_action = UnitQuaternion(burr_rot).inv() * curr_quat
-        rpy_action = quat_action.rpy(unit='deg')
+        rpy_action = quat_action.rpy(unit='deg')  # need to change based on res
 
         return np.concatenate((action, rpy_action))
 

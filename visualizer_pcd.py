@@ -16,6 +16,7 @@ from rrl_td3 import ResidualTD3
 import os
 from spatialmath import UnitQuaternion
 from traction import Traction
+import time
 
 
 if __name__ == "__main__":
@@ -85,7 +86,9 @@ if __name__ == "__main__":
             action = apf.predict(state)
 
         # Step env and log info
+        cur_time = time.time()
         state, reward, terminated, truncated, info = env.step(action)
+        print(f"colapsed time for each step {time.time()-cur_time}")
 
         total_reward = total_reward + reward
         decay_removal = info['decay_removal']

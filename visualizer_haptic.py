@@ -46,12 +46,13 @@ if __name__ == "__main__":
         # tooth='tooth_5_1.0_None_top_2_159_241_487'  # MIP: 7.428571428571429
 
         # Initialize gym environment
-        env = gym.make("DentalEnvPCD-v0", render_mode="human", max_episode_steps=None, tooth=tooth)
+        env = gym.make("DentalEnvPCD-v0", render_mode="human", max_episode_steps=None, tooth=tooth, force_feedback=True)
         state, info = env.reset(seed=42)
 
         total_reward = 0
         total_collisions = 0
         itr = 0
+        cutpath = []
 
         s.bind((HOST, PORT))
         s.listen()
@@ -104,6 +105,7 @@ if __name__ == "__main__":
                     print(f'position: {pos}')
                     print(f'rotation: {rot}')
 
+                    cutpath.append(np.concatenate((pos, rot)))
                     itr += 1
 
                     if terminated or truncated:
@@ -113,7 +115,7 @@ if __name__ == "__main__":
                 except ConnectionResetError:
                     print("Client disconnected.")
                     break
-
+            np.savetxt(f'cutpath/human_data/{tooth}_haptic_1.txt', cutpath)
             env.close()
 
 

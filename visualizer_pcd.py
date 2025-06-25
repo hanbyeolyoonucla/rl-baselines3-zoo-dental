@@ -33,17 +33,18 @@ if __name__ == "__main__":
     # tooth = fname[:-4]
 
     # Select specific tooth
-    # tooth='tooth_3_1.0_None_top_0_144_313_508'  # tooth 3 # MIP: 7.494094488188976
-    # tooth='tooth_3_1.0_None_top_1_227_258_489'  # MIP: 7.002118644067797
-    # tooth='tooth_2_1.0_None_top_1_119_303_490'  # tooth 2 # MIP: 5.384761904761905 traverse: 14.8/67.0
-    # tooth='tooth_2_1.0_None_top_3_228_317_483'  # MIP: 7.802105263157895
-    # tooth='tooth_2_1.0_None_top_4_284_262_509'  # MIP: 9.994252873563218
-    # tooth='tooth_4_1.0_None_top_1_142_349_479'  # MIP: 4.699074074074074
-    tooth='tooth_4_1.0_None_top_2_197_295_494'  # tooth 4 # MIP: 5.74375
-    # tooth='tooth_4_1.0_None_top_3_190_229_502'  # MIP: 8.657777777777778
-    # tooth='tooth_5_1.0_None_top_0_272_249_489'  # MIP: 13.678571428571429
-    # tooth='tooth_5_1.0_None_top_1_118_219_484'  # MIP: 11.854961832061068
-    # tooth='tooth_5_1.0_None_top_2_159_241_487'  # MIP: 7.428571428571429
+    # tooth='tooth_3_1.0_None_top_0_144_313_508'  # MIP: 7.494094488188976 # reward: 18.685433070866146 # tooth 3 
+    # tooth='tooth_3_1.0_None_top_1_227_258_489'  # MIP: 7.002118644067797 # reward: 18.782838983050844
+    # tooth='tooth_2_1.0_None_top_1_119_303_490'  # MIP: 5.384761904761905 # reward: 19.116761904761905 # tooth 2 
+    # tooth='tooth_2_1.0_None_top_3_228_317_483'  # MIP: 7.802105263157895 # reward: 18.624
+    # tooth='tooth_2_1.0_None_top_4_284_262_509'  # MIP: 9.994252873563218 # reward: 18.186206896551724
+    # tooth='tooth_4_1.0_None_top_1_142_349_479'  # MIP: 4.699074074074074 # reward: 19.24652777777778
+    # tooth='tooth_4_1.0_None_top_2_197_295_494'  # MIP: 5.74375 # reward: 19.0459375                   # tooth 4
+    # tooth='tooth_4_1.0_None_top_3_190_229_502'  # MIP: 8.657777777777778 # reward: 18.468444444444447
+    # tooth='tooth_5_1.0_None_top_0_272_249_489'  # MIP: 13.678571428571429 # reward: 17.464285714285715
+    tooth='tooth_5_1.0_None_top_1_118_219_484'  # MIP: 11.854961832061068 # reward: 17.825954198473283
+    # tooth='tooth_5_1.0_None_top_2_159_241_487'  # MIP: 7.428571428571429 # reward: 18.714285714285715
+    # tooth='tooth_syn_top_[1 1 2]'               # MIP: 2.937126800140499 # reward: 19.612574639971903 # tooth synthetic
 
     # Initialize gym environment
     env = gym.make("DentalEnvPCD-v0", render_mode=None, max_episode_steps=200, tooth=tooth)
@@ -55,9 +56,26 @@ if __name__ == "__main__":
     elif policy_type == "IL":
         policy = CustomActorCriticPolicy.load(f'models/bc_traction_policy_30')
     elif policy_type == "TD3":
-        policy = ResidualTD3.load(f'models/td3_best_models/vwrsfir3/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 2
-        # policy = ResidualTD3.load(f'models/td3_best_models/qxvwmwxh/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 3
-        # policy = ResidualTD3.load(f'models/td3_best_models/4yt86ukd/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 4
+        # policy = ResidualTD3.load(f'models/td3_best_models/jh25epx9/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth all
+        # policy = ResidualTD3.load(f'models/td3_best_models/yl3qdnxq/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth all
+        # policy = ResidualTD3.load(f'models/td3_best_models/u9y1h58p/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth
+        # policy = ResidualTD3.load(f'models/td3_best_models/vwrsfir3/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 2 top 1
+        # policy = ResidualTD3.load(f'models/td3_best_models/z1jx7a2v/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 2 top 3
+        # policy = ResidualTD3.load(f'models/td3_best_models/ad4yky08/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 2 top 4
+        # policy = ResidualTD3.load(f'models/td3_best_models/qxvwmwxh/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 3 top 0
+        # policy = ResidualTD3.load(f'models/td3_best_models/ye5lsi2i/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 3 top 1
+        # policy = ResidualTD3.load(f'models/td3_best_models/gen7evvj/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 4 top 1
+        # policy = ResidualTD3.load(f'models/td3_best_models/4yt86ukd/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 4 top 2
+        # policy = ResidualTD3.load(f'models/td3_best_models/7mppwcmc/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 4 top 3
+        # policy = ResidualTD3.load(f'models/td3_best_models/rz238wla/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 5 top 0
+        # policy = ResidualTD3.load(f'models/td3_best_models/tfhu9pdd/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 5 top 1
+        policy = ResidualTD3.load(f'models/td3_best_models/u9y1h58p/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 5 top 2
+        # policy = ResidualTD3.load(f'models/td3_best_models/6hc2lbv4/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 2 shifted
+        # policy = ResidualTD3.load(f'models/td3_best_models/9gn2dhzk/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 3 shifted
+        # policy = ResidualTD3.load(f'models/td3_best_models/ei8kldrx/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 4 shifted
+        # policy = ResidualTD3.load(f'models/td3_best_models/r0c0bz2m/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 2 simple
+        # policy = ResidualTD3.load(f'models/td3_best_models/rfh9oelj/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 3 simple
+        # policy = ResidualTD3.load(f'models/td3_best_models/4w8klpn6/best_model.zip', bc_replay_buffer_path=None, buffer_size=0) # tooth 4 simple
     elif policy_type == "IBRL":
         # policy = IBRL.load(f'models/ibrl_ezf2013i.zip', bc_replay_buffer_path=None)
         # policy = IBRL.load(f'models/ibrl_sgvy41b4.zip', bc_replay_buffer_path=None)
@@ -66,6 +84,7 @@ if __name__ == "__main__":
     total_reward = 0
     total_collisions = 0
     itr = 0
+    cutpath = []
 
     while True:
 
@@ -126,9 +145,9 @@ if __name__ == "__main__":
         print(f'rotation: {rot}')
 
         itr += 1
-
+        cutpath.append(np.concatenate((pos, rot)))
         if terminated or truncated:
             env.close()
             break
-
+    # np.savetxt('cutpath_apf_rrl.txt', cutpath)
     env.close()

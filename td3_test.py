@@ -41,7 +41,7 @@ config = dict(
                 share_features_extractor=False,
                 net_arch=dict(pi=[1024, 1024], qf=[1024, 1024]),
                 normalize_images=False,
-                bc_policy_path=f'models/bc_traction_policy_30',  # for use of pre-trained features extractor from bc policy
+                bc_policy_path=None,  # for use of pre-trained features extractor from bc policy
                 use_bc_features_extractor=False,
                 freeze_features_extractor=False,
                 alpha=0.01,
@@ -62,11 +62,19 @@ run = wandb.init(
 # Define environment
 env = gym.make("DentalEnvPCD-v0",
                render_mode=None,
-               max_episode_steps=config["env_max_episode_steps"],
-               tooth='tooth_2_1.0_None_top_1_119_303_490')
-                # tooth='tooth_2_1.0_None_top_1_119_303_490'
-                # tooth='tooth_4_1.0_None_top_2_197_295_494'
-                # tooth='tooth_3_1.0_None_top_0_144_313_508'
+               max_episode_steps=config["env_max_episode_steps"])
+                # tooth='tooth_3_1.0_None_top_0_144_313_508'  # MIP: 7.494094488188976 # reward: 18.685433070866146 # tooth 3 
+                # tooth='tooth_3_1.0_None_top_1_227_258_489'  # MIP: 7.002118644067797 # reward: 18.782838983050844
+                # tooth='tooth_2_1.0_None_top_1_119_303_490'  # MIP: 5.384761904761905 # reward: 19.116761904761905 # tooth 2 
+                # tooth='tooth_2_1.0_None_top_3_228_317_483'  # MIP: 7.802105263157895 # reward: 18.624
+                # tooth='tooth_2_1.0_None_top_4_284_262_509'  # MIP: 9.994252873563218 # reward: 18.186206896551724
+                # tooth='tooth_4_1.0_None_top_1_142_349_479'  # MIP: 4.699074074074074 # reward: 19.24652777777778
+                # tooth='tooth_4_1.0_None_top_2_197_295_494'  # MIP: 5.74375 # reward: 19.0459375                   # tooth 4
+                # tooth='tooth_4_1.0_None_top_3_190_229_502'  # MIP: 8.657777777777778 # reward: 18.468444444444447
+                # tooth='tooth_5_1.0_None_top_0_272_249_489'  # MIP: 13.678571428571429 # reward: 17.464285714285715
+                # tooth='tooth_5_1.0_None_top_1_118_219_484'  # MIP: 11.854961832061068 # reward: 17.825954198473283
+                # tooth='tooth_5_1.0_None_top_2_159_241_487'  # MIP: 7.428571428571429 # reward: 18.714285714285715
+                # tooth='tooth_syn_top_[1 1 2]'               # MIP: 2.937126800140499 # reward: 19.612574639971903 # tooth synthetic
 env = Monitor(env)
 # eval_env = gym.make("DentalEnvPCD-v0",
 #                render_mode=None,
@@ -80,7 +88,7 @@ env = Monitor(env)
 # define callbacks
 eval_callback = CustomEvalCallback(eval_env=env, best_model_save_path=f'models/td3_best_models/{run.id}',
                                    log_path=None, eval_freq=2_000,
-                                   n_eval_episodes=1,
+                                   n_eval_episodes=11,
                                    deterministic=True, render=False)
 # Define train model  # CustomTD3  # ResidualTD3
 model = ResidualTD3("MultiInputPolicy", env, verbose=1,

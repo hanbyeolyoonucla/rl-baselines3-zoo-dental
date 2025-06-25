@@ -103,6 +103,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
                 extractors[key] = nn.Sequential(nn.Linear(subspace.shape[0], rot_output_dim), nn.LayerNorm(rot_output_dim), nn.ReLU())
                 total_concat_size += rot_output_dim
             else:
+                # pass
                 # The observation key is a vector, flatten it if needed
                 extractors[key] = nn.Flatten()
                 total_concat_size += get_flattened_obs_dim(subspace)

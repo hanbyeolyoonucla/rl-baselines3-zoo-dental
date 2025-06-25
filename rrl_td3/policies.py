@@ -246,10 +246,10 @@ class ResidualTD3Policy(BasePolicy):
         n_critics: int = 2,
         share_features_extractor: bool = True,
         bc_policy: Optional[BasePolicy] = None,
-        bc_policy_path: str = 'models/bc_traction_policy_30',
+        bc_policy_path: str = None,
         use_bc_features_extractor: bool = True,
         freeze_features_extractor: bool = False,
-        alpha: float = 0.1,
+        alpha: float = 0.01,
     ):
         super().__init__(
             observation_space,

@@ -87,6 +87,8 @@ class Traction:
         me = np.cross(enamel_moment_arm, enamel_to_bur).mean(axis=0) if enamel_to_bur.any() else np.zeros(3)
         md = np.cross(dentin_moment_arm, dentin_to_bur).mean(axis=0) if dentin_to_bur.any() else np.zeros(3)
         # min_dist = np.linalg.norm(caries_to_bur, axis=1).min() if caries_to_bur.any() else np.zeros(3)
+
+        # caries_to_bur = caries_to_bur[caries_mask] if np.any(caries_mask) else caries_to_bur
         caries_to_bur = (caries_to_bur / ((caries_to_bur ** 2).sum(axis=1, keepdims=True) + eps)).mean(
             axis=0) if caries_to_bur.any() else np.zeros(3)
         enamel_to_bur = (enamel_to_bur / ((enamel_to_bur ** 2).sum(axis=1, keepdims=True) + eps)).mean(

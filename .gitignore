@@ -47,3 +47,4 @@ dental_env/demos_augmented/
 *.hdf5
 models/
 dental_env/labels/*.npy
+cutpath/

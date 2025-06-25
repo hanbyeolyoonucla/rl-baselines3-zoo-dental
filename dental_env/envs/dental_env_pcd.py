@@ -23,7 +23,7 @@ class DentalEnvPCD(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, collision_check=True, tooth=None, force_feedback=False, window_size=1080):
+    def __init__(self, render_mode=None, collision_check=True, tooth=None, force_feedback=False, window_size=700):
 
         # Define settings
         self._jaw_offset = np.array([3.5, 3.5, -1])
@@ -33,13 +33,16 @@ class DentalEnvPCD(gym.Env):
         self._col_check = collision_check
         self._collision = False
         self._tooth = tooth
+        self._specific_tooth = tooth
         self._window_size = window_size
         self._force_feedback = force_feedback
 
         # Initialize segmentations
         if self._tooth:
             self._state_init = np.load(f'dental_env/labels_augmented/{self._tooth}.npy')
-        self._tooth_dir = f'dental_env/labels_augmented/tooth_2_1.0_None_top_1/'
+        self._tooth_dir = f'dental_env/labels_augmented/trainset/'
+        self._counter = 0  # for using all env equally
+        # self._tooth_dir = f'dental_env/labels_augmented/tooth_2_1.0_None_top_1/'
         # self._tooth_dir = f'dental_env/labels_augmented/tooth_3_1.0_None_top_0/'
         # self._tooth_dir = f'dental_env/labels_augmented/tooth_4_1.0_None_top_2/'
         self._state_shape = np.array([60, 60, 60])
@@ -126,13 +129,18 @@ class DentalEnvPCD(gym.Env):
         super().reset(seed=seed)
 
         # Initialize tooth env
-        if not self._tooth:
+        if not self._specific_tooth:
             dirlist = os.listdir(self._tooth_dir)
-            self._tooth = dirlist[np.random.randint(0, len(dirlist))]
-            while not self._tooth.endswith('npy'):
-                self._tooth = dirlist[np.random.randint(0, len(dirlist))]
+            idx = self._counter % len(dirlist)
+            self._tooth = dirlist[idx]  # for cover all env
+            self._counter += 1
+            # self._tooth = dirlist[np.random.randint(0, len(dirlist))]
+            # while not self._tooth.endswith('npy'):
+            #     self._tooth = dirlist[np.random.randint(0, len(dirlist))]
             self._state_init = np.load(self._tooth_dir+self._tooth)
             self._tooth = self._tooth[:-4]  # remove .npy
+            print(f"Env list {dirlist}")
+            print(f"Reset Env {self._counter}: {self._tooth}")
 
         # Check top left right and initialize agent accordingly
         if 'top' in self._tooth:
@@ -251,7 +259,7 @@ class DentalEnvPCD(gym.Env):
         if self._force_feedback:
 
             # spring constant
-            k_caries, k_enamel, k_dentin = 2, 10, 20
+            k_caries, k_enamel, k_dentin = 3, 10, 20
 
             # computes closest points
             bur_caries = scene.compute_closest_points(self._decay_points)['points'].numpy()
@@ -352,10 +360,10 @@ class DentalEnvPCD(gym.Env):
 
             self.window1 = o3d.visualization.Visualizer()
             self.window1.create_window(window_name='Cut Path Episode', width=self._window_size, height=self._window_size,
-                                       left=50+self._window_size, top=50, visible=True)
+                                       left=self._window_size, top=0, visible=True)
             self.window1z = o3d.visualization.Visualizer()
             self.window1z.create_window(window_name='Cut Path Episode', width=self._window_size, height=self._window_size,
-                                        left=50, top=50, visible=True)
+                                        left=0, top=0, visible=True)
 
             self._ee_vis = copy.deepcopy(self._ee_vis_init)
             self._burr_vis = copy.deepcopy(self._burr_init)
@@ -374,7 +382,7 @@ class DentalEnvPCD(gym.Env):
             self._dentin_pcd_legacy = self._dentin_pcd.to_legacy()
 
             # window 1
-            self.window1.add_geometry(self._burr_vis)
+            # self.window1.add_geometry(self._burr_vis)
             self.window1.add_geometry(self._decay_pcd_legacy)
             self.window1.add_geometry(self._enamel_pcd_legacy)
             self.window1.add_geometry(self._dentin_pcd_legacy)
@@ -384,10 +392,10 @@ class DentalEnvPCD(gym.Env):
             self._frame = o3d.geometry.TriangleMesh.create_coordinate_frame(origin=self._agent_location)
             self.window1.add_geometry(self._frame)
             self.ctr1 = self.window1.get_view_control()
-            self.ctr1.set_up([0, 0, 1])
-            self.ctr1.set_front([0, -1, 1])
+            self.ctr1.set_up([0, 1, 0])
+            self.ctr1.set_front([0, 0, 1])
             self.ctr1.set_lookat([3, 3, 3])
-            self.ctr1.set_zoom(0.6)
+            self.ctr1.set_zoom(1.1)
 
             # window 1z
             self.window1z.add_geometry(self._burr_vis)
@@ -411,7 +419,7 @@ class DentalEnvPCD(gym.Env):
             if self._col_check and self.window_col is None:
                 self.window_col = o3d.visualization.Visualizer()
                 self.window_col.create_window(window_name='Cut Path Episode - Collision Status',
-                                              width=self._window_size, height=self._window_size, left=50+2*self._window_size, top=50, visible=True)
+                                              width=self._window_size, height=self._window_size, left=2*self._window_size, top=0, visible=True)
                 self.window_col.add_geometry(self._burr_vis)
                 self.window_col.add_geometry(self._ee_vis)
                 self.window_col.add_geometry(self._jaw)
@@ -443,7 +451,7 @@ class DentalEnvPCD(gym.Env):
             self._enamel_pcd_legacy = self._enamel_pcd.to_legacy()
             self._dentin_pcd_legacy = self._dentin_pcd.to_legacy()
 
-            self.window1.update_geometry(self._burr_vis)
+            # self.window1.update_geometry(self._burr_vis)
             # self.window1.add_geometry(copy.deepcopy(self._burr_vis))
             self.window1.add_geometry(self._decay_pcd_legacy, reset_bounding_box=False)
             self.window1.add_geometry(self._enamel_pcd_legacy, reset_bounding_box=False)
@@ -454,7 +462,7 @@ class DentalEnvPCD(gym.Env):
 
             self.window1z.update_geometry(self._burr_vis)
             # self.window1z.add_geometry(copy.deepcopy(self._burr_vis))
-            self.window1z.add_geometry(self._decay_pcd_legacy)
+            self.window1z.add_geometry(self._decay_pcd_legacy, reset_bounding_box=False)
             # self.window1z.update_geometry(self._enamel_pcd_legacy)
             # self.window1z.update_geometry(self._dentin_pcd_legacy)
             self.window1z.update_geometry(self._frame)
@@ -533,15 +541,9 @@ class DentalEnvPCD(gym.Env):
         if self.window1 is not None and self.render_mode == "human":
             self.window1.close()
             self.window1z.close()
-            self.window2.close()
-            self.window2z.close()
             self.window1 = None
             self.window1z = None
-            self.window2 = None
-            self.window2z = None
 
         if self.window_col is not None and self.render_mode == "human":
             self.window_col.close()
-            self.window_col2.close()
             self.window_col = None
-            self.window_col2 = None
